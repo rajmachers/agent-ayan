@@ -128,8 +128,8 @@ export function createEndpointRateLimiter(options: {
   });
   
   return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as AuthenticatedRequest).user;
     try {
-      const user = (req as AuthenticatedRequest).user;
       const key = user ? `user:${user.id}` : `ip:${req.ip}`;
       
       await endpointLimiter.consume(key);

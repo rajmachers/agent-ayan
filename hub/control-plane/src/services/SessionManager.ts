@@ -22,6 +22,9 @@ export interface SessionConfig {
     complexity_score?: number;
     ai_pre_scan_result?: 'GREEN' | 'AMBER' | 'RED';
     rejection_reason?: string;
+    id_document_uploaded?: boolean;
+    document_type?: string;
+    upload_timestamp?: Date;
   };
 }
 

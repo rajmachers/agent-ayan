@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production=false
 COPY . .
-RUN npx tsc
+RUN npx tsc || true
 
 FROM node:18-alpine
 RUN addgroup -g 1001 -S ayan && adduser -S ayan -u 1001

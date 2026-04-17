@@ -7,7 +7,6 @@ export const redisClient: RedisClientType = createClient({
   url: config.redis.url,
   socket: {
     connectTimeout: 5000,
-    lazyConnect: true,
   },
 });
 

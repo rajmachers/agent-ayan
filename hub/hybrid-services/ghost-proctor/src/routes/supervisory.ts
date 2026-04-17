@@ -138,16 +138,15 @@ router.get('/session/:sessionId', async (req: any, res: Response) => {
     const session = sessionQuery.rows[0];
 
     // Get comprehensive real-time data
+    const gatekeeperState = await req.redis.hgetall(`gatekeeper:session:${sessionId}`);
     const [
-      gatekeeperState,
       violationsData,
       streamData,
       credibilityData,
       proctorPerformance
     ] = await Promise.all([
-      req.redis.hgetall(`gatekeeper:session:${sessionId}`),
       req.redis.lrange(`session:${sessionId}:violations`, 0, -1),
-      req.redis.hgetall(`stream:${gatekeeperState.streamId}`),
+      req.redis.hgetall(`stream:${(gatekeeperState as any)?.streamId || 'unknown'}`),
       req.redis.hgetall(`candidate:${session.candidate_id}:credibility`),
       req.redis.hgetall(`proctor:${session.proctor_id}:performance`)
     ]);

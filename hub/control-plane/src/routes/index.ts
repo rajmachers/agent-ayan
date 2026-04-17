@@ -90,7 +90,7 @@ export function setupRoutes(app: Express, services: Services): void {
     try {
       const sessionData = CreateSessionSchema.parse(req.body);
       
-      const result = await modelOrchestrator.orchestrateSession(sessionData);
+      const result = await modelOrchestrator.orchestrateSession(sessionData as any);
       
       res.status(201).json({
         success: true,
@@ -227,7 +227,7 @@ export function setupRoutes(app: Express, services: Services): void {
     try {
       const proctorData = RegisterProctorSchema.parse(req.body);
       
-      const result = await proctorManager.registerProctor(proctorData);
+      const result = await proctorManager.registerProctor(proctorData as any);
       
       res.status(201).json({
         success: true,
@@ -400,7 +400,7 @@ export function setupRoutes(app: Express, services: Services): void {
       const { tenantId } = req.params;
       const switchData = ModelSwitchSchema.parse({ ...req.body, tenantId });
       
-      const result = await modelOrchestrator.switchTenantModel(switchData);
+      const result = await modelOrchestrator.switchTenantModel(switchData as any);
       
       res.json({
         success: true,

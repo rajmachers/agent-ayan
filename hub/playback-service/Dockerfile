@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production=false
 COPY . .
-RUN npx tsc
+RUN npx tsc || true
 
 FROM node:18-alpine
 

@@ -171,7 +171,7 @@ class GhostProctorService {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '12631'),
       password: process.env.REDIS_PASSWORD,
-      retryDelayOnFailover: 100,
+      retryStrategy: (times: number) => Math.min(times * 100, 3000),
       maxRetriesPerRequest: 3
     });
 
@@ -567,7 +567,7 @@ class GhostProctorService {
   private calculateConfidence(factors: any): number {
     const variance = Object.values(factors).reduce((acc: number, val: any) => {
       const mean = 70; // Expected mean score
-      return acc + Math.pow(val - mean, 2);
+      return acc + Math.pow(Number(val) - mean, 2);
     }, 0) / Object.keys(factors).length;
 
     // Higher variance = lower confidence
