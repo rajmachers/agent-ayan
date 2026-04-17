@@ -1,0 +1,7 @@
+port: 7880
+keys:
+  devkey: devsecret
+redis:
+  address: ayan-p6-redis:6379
+logging:
+  level: info

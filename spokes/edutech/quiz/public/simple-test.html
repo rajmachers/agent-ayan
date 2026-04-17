@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple SDK Test</title>
+</head>
+<body>
+    <h1>ProctorSDK Connection Test</h1>
+    <button onclick="testConnection()">Test WebSocket Connection</button>
+    <div id="status"></div>
+
+    <script>
+        function testConnection() {
+            const status = document.getElementById('status');
+            status.innerHTML = '<p>Testing direct WebSocket connection...</p>';
+            
+            try {
+                const ws = new WebSocket('ws://localhost:8080?type=candidate');
+                
+                ws.onopen = () => {
+                    status.innerHTML += '<p style="color:green;">✅ WebSocket connected!</p>';
+                    
+                    // Send session start message
+                    const message = {
+                        type: 'session:start',
+                        data: {
+                            candidateId: 'test-candidate-123',
+                            examId: 'test-exam',
+                            organizationId: 'test-org',
+                            totalQuestions: 5,
+                            metadata: {
+                                userAgent: navigator.userAgent,
+                                timestamp: new Date().toISOString()
+                            }
+                        }
+                    };
+                    
+                    ws.send(JSON.stringify(message));
+                    status.innerHTML += '<p>📤 Sent session start message</p>';
+                };
+                
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    status.innerHTML += `<p style="color:blue;">📨 Received: ${JSON.stringify(message)}</p>`;
+                };
+                
+                ws.onerror = (error) => {
+                    status.innerHTML += `<p style="color:red;">❌ WebSocket error: ${error}</p>`;
+                };
+                
+                ws.onclose = () => {
+                    status.innerHTML += '<p style="color:orange;">🔌 WebSocket closed</p>';
+                };
+                
+            } catch (error) {
+                status.innerHTML += `<p style="color:red;">❌ Failed to create WebSocket: ${error}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

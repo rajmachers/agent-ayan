@@ -1,0 +1,214 @@
+'use client';
+
+import { useRef, ReactNode } from 'react';
+import { motion, useScroll, useTransform, useSpring, MotionValue } from 'framer-motion';
+
+/* ═══════════════════════════════════════════════════════
+   APPLE-STYLE SCROLL ANIMATION COMPONENTS
+   Sticky reveals, zoom-ins, parallax, horizontal scroll
+   ═══════════════════════════════════════════════════════ */
+
+/** Full-viewport section that pins and zooms content from 0.6 → 1 scale */
+export function ZoomReveal({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const scale = useTransform(scrollYProgress, [0, 0.4, 0.6, 1], [0.7, 1, 1, 0.9]);
+  const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
+  const smoothScale = useSpring(scale, { stiffness: 100, damping: 30 });
+  const smoothOpacity = useSpring(opacity, { stiffness: 100, damping: 30 });
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <motion.div style={{ scale: smoothScale, opacity: smoothOpacity }}>
+        {children}
+      </motion.div>
+    </div>
+  );
+}
+
+/** Sticky section that pins content while scrolling through internal progress */
+export function StickyReveal({
+  children,
+  height = '200vh',
+  className = '',
+}: {
+  children: (progress: MotionValue<number>) => ReactNode;
+  height?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const smoothProgress = useSpring(scrollYProgress, { stiffness: 150, damping: 25 });
+
+  return (
+    <div ref={ref} style={{ height }} className={`relative ${className}`}>
+      <div className="sticky top-0 h-screen flex items-center justify-center overflow-hidden">
+        {children(smoothProgress)}
+      </div>
+    </div>
+  );
+}
+
+/** Parallax layer — moves at a different speed */
+export function Parallax({
+  children,
+  speed = 0.5,
+  className = '',
+}: {
+  children: ReactNode;
+  speed?: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const y = useTransform(scrollYProgress, [0, 1], [speed * 100, -speed * 100]);
+
+  return (
+    <div ref={ref} className={`relative ${className}`}>
+      <motion.div style={{ y }}>{children}</motion.div>
+    </div>
+  );
+}
+
+/** Text that scales up as it enters viewport — fast snap */
+export function ScaleText({
+  children,
+  className = '',
+  from = 0.92,
+  to = 1,
+}: {
+  children: ReactNode;
+  className?: string;
+  from?: number;
+  to?: number;
+}) {
+  return (
+    <motion.div
+      initial={{ scale: from, opacity: 0 }}
+      whileInView={{ scale: to, opacity: 1 }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      viewport={{ once: true, amount: 0.5 }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Horizontal scroll track — compact, no excessive height */
+export function HorizontalScroll({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] });
+  const x = useTransform(scrollYProgress, [0, 1], ['0%', '-60%']);
+
+  return (
+    <div ref={ref} className="relative h-[180vh]">
+      <div className="sticky top-0 h-[60vh] flex items-center overflow-hidden">
+        <motion.div style={{ x }} className={`flex gap-6 px-8 ${className}`}>
+          {children}
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+/** Slide-in from direction — fast, snappy */
+export function SlideIn({
+  children,
+  direction = 'left',
+  className = '',
+  delay = 0,
+}: {
+  children: ReactNode;
+  direction?: 'left' | 'right' | 'up' | 'down';
+  className?: string;
+  delay?: number;
+}) {
+  const offsets = {
+    left: { x: -40, y: 0 },
+    right: { x: 40, y: 0 },
+    up: { x: 0, y: 40 },
+    down: { x: 0, y: -40 },
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, ...offsets[direction] }}
+      whileInView={{ opacity: 1, x: 0, y: 0 }}
+      transition={{ duration: 0.45, delay, ease: 'easeOut' }}
+      viewport={{ once: true, amount: 0.2 }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** 3D perspective card that tilts on scroll */
+export function PerspectiveCard({
+  children,
+  className = '',
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end start'] });
+  const rotateX = useTransform(scrollYProgress, [0, 0.5, 1], [15, 0, -15]);
+  const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
+
+  return (
+    <motion.div
+      ref={ref}
+      style={{ rotateX, opacity, perspective: 1000 }}
+      className={`transform-gpu ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Morphing number counter */
+export function CountUp({
+  target,
+  suffix = '',
+  prefix = '',
+  className = '',
+}: {
+  target: number;
+  suffix?: string;
+  prefix?: string;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'center center'] });
+  const value = useTransform(scrollYProgress, [0, 1], [0, target]);
+  const rounded = useTransform(value, (v) => `${prefix}${Math.round(v)}${suffix}`);
+
+  return (
+    <motion.span ref={ref} className={className}>
+      {rounded}
+    </motion.span>
+  );
+}
+
+/** Fast text reveal — whole text fades in with slight upward motion */
+export function MaskReveal({ text, className = '' }: { text: string; className?: string }) {
+  return (
+    <motion.p
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: 'easeOut' }}
+      viewport={{ once: true, amount: 0.5 }}
+      className={className}
+    >
+      {text}
+    </motion.p>
+  );
+}

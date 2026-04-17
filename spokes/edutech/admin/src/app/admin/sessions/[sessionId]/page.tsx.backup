@@ -1,0 +1,667 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
+import {
+  ArrowLeft, Play, Pause, SkipForward, SkipBack,
+  Shield, Eye, Mic, Brain, AlertTriangle,
+  Clock, Activity, Camera, Download,
+  Volume2, Monitor, User, FileText
+} from 'lucide-react';
+
+interface SessionDetail {
+  sessionId: string;
+  candidateId: string;
+  examId: string;
+  organizationId: string;
+  status: string;
+  score: {
+    current: number;
+    credibilityIndex: number;
+    riskLevel: string;
+  };
+  violations: Array<{
+    id: string;
+    type: string;
+    severity: string;
+    timestamp: string;
+    description: string;
+    confidence: number;
+    resolved: boolean;
+    source: string;
+  }>;
+  aiAgents: {
+    vision: { status: string; healthScore: number };
+    audio: { status: string; healthScore: number };
+    behavior: { status: string; healthScore: number };
+  };
+  duration: number;
+  createdAt: string;
+}
+
+export default function SessionDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const sessionId = params?.sessionId as string;
+  
+  const [session, setSession] = useState<SessionDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'overview' | 'violations' | 'playback' | 'export'>('overview');
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    if (sessionId) {
+      fetchSessionDetail();
+    }
+  }, [sessionId]);
+
+  const fetchSessionDetail = async () => {
+    try {
+      console.log(`🔍 Fetching session detail for: ${sessionId}`);
+      
+      // Use the local proxy API instead of direct cross-origin call
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        
+        if (data.success && data.session) {
+          // Transform the data to match our SessionDetail interface
+          const sessionData = data.session;
+          const transformedSession: SessionDetail = {
+            sessionId: sessionData.sessionId,
+            candidateId: sessionData.candidateId || sessionData.candidateName || 'Unknown',
+            examId: sessionData.examId,
+            organizationId: sessionData.organizationId,
+            status: sessionData.status || (sessionData.completedAt ? 'completed' : 'active'),
+            score: {
+              current: sessionData.score || 0,
+              credibilityIndex: sessionData.credibilityScore || 95,
+              riskLevel: sessionData.riskLevel || 'low'
+            },
+            violations: sessionData.violations?.map((v: any, index: number) => ({
+              id: `violation-${index}`,
+              type: v.type || 'unknown',
+              severity: v.severity || 'warning',
+              timestamp: v.timestamp || sessionData.startedAt,
+              description: v.description || v.message || 'Unknown violation',
+              confidence: v.confidence || 85,
+              resolved: v.resolved || false,
+              source: v.source || 'proctor-system'
+            })) || [],
+            aiAgents: {
+              vision: { status: 'active', healthScore: 95 },
+              audio: { status: 'active', healthScore: 92 },
+              behavior: { status: 'active', healthScore: 98 }
+            },
+            duration: sessionData.duration || 0,
+            createdAt: sessionData.startedAt || sessionData.createdAt || new Date().toISOString()
+          };
+          
+          setSession(transformedSession);
+          console.log('✅ Session detail loaded successfully');
+        } else {
+          console.warn('⚠️ Session not found in API response');
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch session:', response.status, errorData);
+        
+        if (response.status === 404) {
+          console.log('📢 Session not found - may be completed or invalid ID');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch session detail:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString();
+  };
+
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return hours > 0 ? `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}` : `${minutes}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getViolationIcon = (type: string) => {
+    switch (type.toLowerCase()) {
+      case 'face_not_detected': case 'multiple_faces': return Camera;
+      case 'background_noise': case 'multiple_voices': return Volume2;
+      case 'tab_focus_lost': case 'browser_switch': return Monitor;
+      default: return AlertTriangle;
+    }
+  };
+
+  const getSeverityColor = (severity: string) => {
+    switch (severity.toLowerCase()) {
+      case 'info': return 'text-blue-400 bg-blue-400/10';
+      case 'warning': return 'text-yellow-400 bg-yellow-400/10';
+      case 'critical': return 'text-red-400 bg-red-400/10';
+      default: return 'text-gray-400 bg-gray-400/10';
+    }
+  };
+
+  const jumpToViolation = (timestamp: string) => {
+    const violationTime = Math.floor((new Date(timestamp).getTime() - new Date(session?.createdAt || '').getTime()) / 1000);
+    setCurrentTime(violationTime);
+    setIsPlaying(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-gray-400 mt-2">Loading session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-navy-950 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
+          <p className="text-white text-lg">Session not found</p>
+          <p className="text-gray-400">The requested session could not be loaded.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-navy-950">
+      {/* Header */}
+      <header className="border-b border-white/10 bg-navy-900/50 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => router.back()}
+                className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back
+              </button>
+              <div>
+                <h1 className="text-xl font-bold text-white">Session Detail</h1>
+                <p className="text-gray-400 text-sm font-mono">{sessionId.slice(-12)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              {/* Enhanced Status Badge */}
+              <div className="flex items-center gap-2">
+                {session.status === 'active' || session.status === 'in-progress' ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                    <span className="px-3 py-1 rounded-full text-xs font-medium text-green-400 bg-green-400/10 border border-green-400/20">
+                      🔴 LIVE SESSION
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      Real-time monitoring active
+                    </span>
+                  </>
+                ) : session.status === 'completed' ? (
+                  <>
+                    <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                    <span className="px-3 py-1 rounded-full text-xs font-medium text-blue-400 bg-blue-400/10 border border-blue-400/20">
+                      ✅ COMPLETED
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      Available for review & playback
+                    </span>
+                  </>
+                ) : session.status === 'terminated' ? (
+                  <>
+                    <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                    <span className="px-3 py-1 rounded-full text-xs font-medium text-red-400 bg-red-400/10 border border-red-400/20">
+                      🚫 TERMINATED
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      Session ended prematurely
+                    </span>
+                  </>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-xs font-medium text-gray-400 bg-gray-400/10">
+                    {session.status.toUpperCase()}
+                  </span>
+                )}
+              </div>
+              
+              {/* Live Session Actions */}
+              {(session.status === 'active' || session.status === 'in-progress') && (
+                <div className="flex items-center gap-2">
+                  <button className="px-3 py-1 bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 rounded-lg text-xs hover:bg-yellow-400/20 transition-colors">
+                    📢 Alert Candidate
+                  </button>
+                  <button className="px-3 py-1 bg-red-400/10 text-red-400 border border-red-400/20 rounded-lg text-xs hover:bg-red-400/20 transition-colors">
+                    🚫 Terminate
+                  </button>
+                </div>
+              )}
+              
+              {/* Completed Session Actions */}
+              {session.status === 'completed' && (
+                <div className="flex items-center gap-2">
+                  <button className="px-3 py-1 bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 rounded-lg text-xs hover:bg-cyan-400/20 transition-colors">
+                    📺 Playback
+                  </button>
+                  <button className="px-3 py-1 bg-blue-400/10 text-blue-400 border border-blue-400/20 rounded-lg text-xs hover:bg-blue-400/20 transition-colors">
+                    📄 Export Report
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {/* Session Overview Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-navy-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Shield className="w-5 h-5 text-cyan-400" />
+              <span className="text-gray-400">Credibility Score</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl font-bold text-white">{session.score.current}%</span>
+              <span className={`text-sm px-2 py-1 rounded ${
+                session.score.riskLevel === 'low' ? 'text-green-400 bg-green-400/10' : 'text-yellow-400 bg-yellow-400/10'
+              }`}>
+                {session.score.riskLevel}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-navy-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <AlertTriangle className="w-5 h-5 text-yellow-400" />
+              <span className="text-gray-400">Violations</span>
+            </div>
+            <span className="text-2xl font-bold text-white">{session.violations.length}</span>
+          </div>
+
+          <div className="bg-navy-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Clock className="w-5 h-5 text-blue-400" />
+              <span className="text-gray-400">Duration</span>
+            </div>
+            <span className="text-2xl font-bold text-white">{formatDuration(session.duration)}</span>
+          </div>
+
+          <div className="bg-navy-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Activity className="w-5 h-5 text-green-400" />
+              <span className="text-gray-400">AI Health</span>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex flex-col items-center">
+                <Eye className="w-4 h-4 text-gray-400" />
+                <span className="text-xs text-white">{Math.round(session.aiAgents.vision.healthScore * 100)}%</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <Mic className="w-4 h-4 text-gray-400" />
+                <span className="text-xs text-white">{Math.round(session.aiAgents.audio.healthScore * 100)}%</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <Brain className="w-4 h-4 text-gray-400" />
+                <span className="text-xs text-white">{Math.round(session.aiAgents.behavior.healthScore * 100)}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6">
+          {[
+            { id: 'overview', label: 'Overview', icon: Shield },
+            { id: 'violations', label: 'Violations', icon: AlertTriangle },
+            { id: 'playback', label: 'Playback', icon: Play },
+            { id: 'export', label: 'Export', icon: Download }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-cyan-400/20 text-cyan-400'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <tab.icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-navy-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-6"
+        >
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-white mb-4">Session Details</h3>
+                {(session.status === 'active' || session.status === 'in-progress') && (
+                  <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-lg border border-green-400/20">
+                    🔴 Monitoring in real-time
+                  </span>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-white font-medium mb-2">Candidate Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-gray-400">ID:</span> <span className="text-white">{session.candidateId}</span></p>
+                    <p><span className="text-gray-400">Exam:</span> <span className="text-white">{session.examId}</span></p>
+                    <p><span className="text-gray-400">Started:</span> <span className="text-white">{formatTimestamp(session.createdAt)}</span></p>
+                    {session.status === 'completed' && (
+                      <p><span className="text-gray-400">Completed:</span> <span className="text-white">{formatTimestamp(session.createdAt)}</span></p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-white font-medium mb-2">
+                    {(session.status === 'active' || session.status === 'in-progress') 
+                      ? 'Live AI Monitoring' 
+                      : 'AI Analysis Summary'
+                    }
+                  </h4>
+                  <div className="space-y-2">
+                    {Object.entries(session.aiAgents).map(([type, agent]) => (
+                      <div key={type} className="flex items-center justify-between">
+                        <span className="text-gray-400 capitalize">{type}</span>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            agent.status === 'active' ? 'bg-green-400' : 'bg-gray-400'
+                          }`}></div>
+                          <span className="text-white text-xs">{Math.round(agent.healthScore * 100)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {(session.status === 'active' || session.status === 'in-progress') && (
+                    <div className="mt-4 p-3 bg-green-400/5 border border-green-400/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-400 text-xs">
+                        <Activity className="w-4 h-4" />
+                        <span>System actively monitoring candidate behavior</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {session.status === 'completed' && (
+                    <div className="mt-4 p-3 bg-blue-400/5 border border-blue-400/20 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-400 text-xs">
+                        <FileText className="w-4 h-4" />
+                        <span>Session analysis complete - ready for review</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {/* Session-specific information */}
+              {(session.status === 'active' || session.status === 'in-progress') && (
+                <div className="border-t border-white/10 pt-6">
+                  <h4 className="text-white font-medium mb-4">Live Session Controls</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <button className="p-4 bg-yellow-400/10 border border-yellow-400/20 rounded-lg hover:bg-yellow-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-yellow-400 mb-2">
+                        <AlertTriangle className="w-5 h-5" />
+                        <span className="font-medium">Send Alert</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Notify candidate of violation</p>
+                    </button>
+                    
+                    <button className="p-4 bg-blue-400/10 border border-blue-400/20 rounded-lg hover:bg-blue-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-blue-400 mb-2">
+                        <Monitor className="w-5 h-5" />
+                        <span className="font-medium">View Stream</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Monitor live camera feed</p>
+                    </button>
+                    
+                    <button className="p-4 bg-red-400/10 border border-red-400/20 rounded-lg hover:bg-red-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-red-400 mb-2">
+                        <User className="w-5 h-5" />
+                        <span className="font-medium">Terminate</span>
+                      </div>
+                      <p className="text-xs text-gray-400">End session immediately</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {session.status === 'completed' && (
+                <div className="border-t border-white/10 pt-6">
+                  <h4 className="text-white font-medium mb-4">Review & Export Options</h4>
+                  <div className="grid grid-cols-3 gap-4">
+                    <button className="p-4 bg-cyan-400/10 border border-cyan-400/20 rounded-lg hover:bg-cyan-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-cyan-400 mb-2">
+                        <Play className="w-5 h-5" />
+                        <span className="font-medium">Playback</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Review session recording</p>
+                    </button>
+                    
+                    <button className="p-4 bg-blue-400/10 border border-blue-400/20 rounded-lg hover:bg-blue-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-blue-400 mb-2">
+                        <FileText className="w-5 h-5" />
+                        <span className="font-medium">Report</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Generate PDF report</p>
+                    </button>
+                    
+                    <button className="p-4 bg-purple-400/10 border border-purple-400/20 rounded-lg hover:bg-purple-400/20 transition-colors">
+                      <div className="flex items-center gap-2 text-purple-400 mb-2">
+                        <Download className="w-5 h-5" />
+                        <span className="font-medium">Export</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Download session data</p>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+                          <div className="w-12 bg-white/10 rounded-full h-1.5">
+                            <div 
+                              className="h-1.5 bg-green-400 rounded-full"
+                              style={{ width: `${agent.healthScore * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-white text-sm">{Math.round(agent.healthScore * 100)}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'violations' && (
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Violations Timeline ({session.violations.length})
+              </h3>
+              <div className="space-y-3">
+                {session.violations.map(violation => {
+                  const ViolationIcon = getViolationIcon(violation.type);
+                  return (
+                    <div
+                      key={violation.id}
+                      className="flex items-center gap-4 p-4 border border-white/10 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                      onClick={() => jumpToViolation(violation.timestamp)}
+                    >
+                      <div className="p-2 rounded-lg bg-white/10">
+                        <ViolationIcon className="w-4 h-4 text-gray-400" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className="text-white font-medium">{violation.type.replace(/_/g, ' ')}</h4>
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityColor(violation.severity)}`}>
+                            {violation.severity}
+                          </span>
+                          <span className="text-gray-400 text-sm">{formatTimestamp(violation.timestamp)}</span>
+                        </div>
+                        <p className="text-gray-400 text-sm">{violation.description}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className="text-xs text-gray-500">Confidence: {Math.round(violation.confidence * 100)}%</span>
+                          <span className="text-xs text-gray-500">Source: {violation.source}</span>
+                        </div>
+                      </div>
+                      <div className="text-gray-400">
+                        <Play className="w-4 h-4" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'playback' && (
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Session Playback</h3>
+              
+              {/* Mock Video Players */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div className="space-y-3">
+                  <h4 className="text-white font-medium flex items-center gap-2">
+                    <Camera className="w-4 h-4" />
+                    Webcam Feed
+                  </h4>
+                  <div className="aspect-video bg-black rounded-lg flex items-center justify-center border border-white/10">
+                    <div className="text-center">
+                      <Camera className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-400">Webcam recording</p>
+                      <p className="text-gray-500 text-sm">Click play to view</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
+                  <h4 className="text-white font-medium flex items-center gap-2">
+                    <Monitor className="w-4 h-4" />
+                    Screen Recording
+                  </h4>
+                  <div className="aspect-video bg-black rounded-lg flex items-center justify-center border border-white/10">
+                    <div className="text-center">
+                      <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-400">Screen recording</p>
+                      <p className="text-gray-500 text-sm">Click play to view</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Playback Controls */}
+              <div className="bg-black/30 rounded-lg p-4">
+                <div className="flex items-center gap-4 mb-4">
+                  <button
+                    onClick={() => setIsPlaying(!isPlaying)}
+                    className="flex items-center justify-center w-10 h-10 rounded-full bg-cyan-400 text-black hover:bg-cyan-300 transition-colors"
+                  >
+                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
+                  </button>
+                  
+                  <button className="p-2 rounded hover:bg-white/10 transition-colors">
+                    <SkipBack className="w-4 h-4 text-gray-400" />
+                  </button>
+                  
+                  <button className="p-2 rounded hover:bg-white/10 transition-colors">
+                    <SkipForward className="w-4 h-4 text-gray-400" />
+                  </button>
+
+                  <div className="flex-1 flex items-center gap-3">
+                    <span className="text-white text-sm font-mono">{formatDuration(currentTime)}</span>
+                    <div className="flex-1 bg-white/10 rounded-full h-2 relative">
+                      <div 
+                        className="bg-cyan-400 rounded-full h-2 transition-all"
+                        style={{ width: `${(currentTime / session.duration) * 100}%` }}
+                      />
+                      {/* Violation markers */}
+                      {session.violations.map((violation, index) => {
+                        const violationTime = Math.floor((new Date(violation.timestamp).getTime() - new Date(session.createdAt).getTime()) / 1000);
+                        const position = (violationTime / session.duration) * 100;
+                        return (
+                          <div
+                            key={violation.id}
+                            className="absolute top-0 w-3 h-2 bg-red-400 rounded transform -translate-x-1/2 cursor-pointer hover:bg-red-300"
+                            style={{ left: `${position}%` }}
+                            onClick={() => jumpToViolation(violation.timestamp)}
+                            title={`${violation.type} at ${formatTimestamp(violation.timestamp)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <span className="text-gray-400 text-sm font-mono">{formatDuration(session.duration)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'export' && (
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Export Session Data</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button className="flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                  <FileText className="w-5 h-5 text-blue-400" />
+                  <div className="text-left">
+                    <p className="text-white font-medium">PDF Report</p>
+                    <p className="text-gray-400 text-sm">Complete audit report with violations and scores</p>
+                  </div>
+                </button>
+                
+                <button className="flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                  <Download className="w-5 h-5 text-green-400" />
+                  <div className="text-left">
+                    <p className="text-white font-medium">CSV Data</p>
+                    <p className="text-gray-400 text-sm">Raw violation data for analysis</p>
+                  </div>
+                </button>
+                
+                <button className="flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                  <Camera className="w-5 h-5 text-purple-400" />
+                  <div className="text-left">
+                    <p className="text-white font-medium">Video Archive</p>
+                    <p className="text-gray-400 text-sm">Download recorded sessions</p>
+                  </div>
+                </button>
+                
+                <button className="flex items-center gap-3 p-4 border border-white/10 rounded-lg hover:bg-white/5 transition-colors">
+                  <Activity className="w-5 h-5 text-cyan-400" />
+                  <div className="text-left">
+                    <p className="text-white font-medium">Analytics Data</p>
+                    <p className="text-gray-400 text-sm">AI confidence scores and metrics</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </div>
+  );
+}

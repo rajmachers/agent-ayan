@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Full Integration Test</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; background: #f9fafb; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .test-section { background: white; padding: 20px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; margin: 10px; cursor: pointer; font-weight: 600; }
+        .button:hover { background: #2563eb; }
+        .button.success { background: #10b981; }
+        .button.warning { background: #f59e0b; }
+        .button.danger { background: #ef4444; }
+        .status { padding: 15px; margin: 10px 0; border-radius: 6px; border: 1px solid; }
+        .success { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .error { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+        .info { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+        .warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+        #logs { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+        .candidate-info { display: flex; gap: 20px; align-items: center; margin: 15px 0; }
+        .links { margin-top: 20px; }
+        .links a { display: inline-block; margin: 5px; padding: 8px 16px; background: #6b7280; color: white; text-decoration: none; border-radius: 6px; }
+        .links a:hover { background: #4b5563; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Complete Proctoring Platform Test</h1>
+        
+        <div class="test-section">
+            <h2>🎯 Test Candidate Session</h2>
+            <div class="status info">
+                <strong>Status:</strong> <span id="main-status">Ready to start testing</span>
+            </div>
+            
+            <div class="candidate-info">
+                <div>
+                    <strong>Test Candidate:</strong><br>
+                    <code>student001@cs.university.edu</code><br>
+                    <small>CS Department - Clean Session</small>
+                </div>
+                <button class="button" onclick="startCandidateSession()">
+                    🚀 Start Proctored Session
+                </button>
+            </div>
+
+            <div class="candidate-info">
+                <div>
+                    <strong>High-Risk Test:</strong><br>
+                    <code>student002@cs.university.edu</code><br>
+                    <small>CS Department - With Violations</small>
+                </div>
+                <button class="button warning" onclick="startViolationSession()">
+                    ⚠️ Start High-Risk Session
+                </button>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📊 Session Management</h2>
+            <button class="button" onclick="checkSessions()">📈 Check Active Sessions</button>
+            <button class="button success" onclick="testViolations()">🚨 Trigger Test Violations</button>
+            <button class="button danger" onclick="cleanupSessions()">🧹 Cleanup Test Sessions</button>
+        </div>
+
+        <div class="test-section">
+            <h2>🔗 Platform Access Links</h2>
+            <div class="links">
+                <a href="http://localhost:3001" target="_blank">📝 Quiz Interface (Port 3001)</a>
+                <a href="http://localhost:3002" target="_blank">👥 Admin Dashboard (Port 3002)</a>
+                <a href="/test-sdk.html" target="_blank">🧪 SDK Test Page</a>
+                <a href="/debug-proctor.html" target="_blank">🐛 Debug Console</a>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📜 Test Logs</h2>
+            <button class="button" onclick="clearLogs()">Clear Logs</button>
+            <div id="logs"></div>
+        </div>
+    </div>
+
+    <script src="/proctor-sdk-p6.js"></script>
+    <script>
+        const statusEl = document.getElementById('main-status');
+        const logsEl = document.getElementById('logs');
+        
+        let currentSession = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+            logsEl.innerHTML += `<div>[${timestamp}] ${emoji} ${message}</div>`;
+            logsEl.scrollTop = logsEl.scrollHeight;
+            console.log(`[INTEGRATION-TEST] ${message}`);
+        }
+
+        function updateStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            const parent = statusEl.parentElement;
+            parent.className = `status ${type}`;
+        }
+
+        function clearLogs() {
+            logsEl.innerHTML = '';
+        }
+
+        function startCandidateSession() {
+            log('🎯 Starting clean candidate session...');
+            updateStatus('Initializing proctoring session...', 'info');
+
+            if (!window.ProctorSDK) {
+                log('❌ ProctorSDK not available', 'error');
+                updateStatus('SDK not loaded', 'error');
+                return;
+            }
+
+            try {
+                // Stop any existing session
+                if (currentSession) {
+                    currentSession.destroy();
+                }
+
+                currentSession = window.ProctorSDK.init({
+                    candidateId: 'student001@cs.university.edu',
+                    examId: 'financial-literacy-demo',
+                    organizationId: '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94', // CS Department
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: false,
+                    autoStart: true
+                });
+
+                currentSession.on('session:started', (data) => {
+                    log(`✅ Session started successfully! ID: ${data.sessionId}`, 'success');
+                    updateStatus('Proctoring session active - Check admin dashboard!', 'success');
+                });
+
+                currentSession.on('violation', (violation) => {
+                    log(`🚨 Violation detected: ${violation.description}`, 'warning');
+                });
+
+                log('📝 Session initialization requested for clean candidate');
+
+            } catch (error) {
+                log(`❌ Failed to start session: ${error.message}`, 'error');
+                updateStatus('Session failed to start', 'error');
+            }
+        }
+
+        function startViolationSession() {
+            log('⚠️ Starting high-risk candidate session with violations...');
+            updateStatus('Starting high-risk session...', 'warning');
+
+            if (!window.ProctorSDK) {
+                log('❌ ProctorSDK not available', 'error');
+                return;
+            }
+
+            try {
+                // Stop any existing session
+                if (currentSession) {
+                    currentSession.destroy();
+                }
+
+                currentSession = window.ProctorSDK.init({
+                    candidateId: 'student002@cs.university.edu',
+                    examId: 'financial-literacy-demo',
+                    organizationId: '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94', // CS Department
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: true, // Enable violations
+                    autoStart: true
+                });
+
+                currentSession.on('session:started', (data) => {
+                    log(`✅ High-risk session started! ID: ${data.sessionId}`, 'success');
+                    log('🚨 Violation simulation will begin in 3 seconds...', 'warning');
+                    updateStatus('High-risk session active - Violations incoming!', 'warning');
+                });
+
+                currentSession.on('violation', (violation) => {
+                    log(`🚨 VIOLATION: ${violation.description} (${violation.type})`, 'error');
+                });
+
+                log('📝 High-risk session initialization requested');
+
+            } catch (error) {
+                log(`❌ Failed to start violation session: ${error.message}`, 'error');
+                updateStatus('High-risk session failed', 'error');
+            }
+        }
+
+        function checkSessions() {
+            log('📊 Checking active sessions via WebSocket...');
+
+            const ws = new WebSocket('ws://localhost:8080?type=admin');
+            
+            ws.onopen = () => {
+                log('📡 Connected to session manager as admin');
+                ws.send(JSON.stringify({ type: 'admin:request_sessions' }));
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                log(`📈 Session data received: ${JSON.stringify(message)}`, 'success');
+                
+                if (message.type === 'admin:sessions_list') {
+                    const sessionCount = message.sessions ? message.sessions.length : 0;
+                    log(`📊 Found ${sessionCount} active sessions`);
+                    updateStatus(`${sessionCount} active sessions found`, sessionCount > 0 ? 'success' : 'warning');
+                }
+                ws.close();
+            };
+
+            ws.onerror = (error) => {
+                log('❌ Failed to check sessions', 'error');
+                ws.close();
+            };
+        }
+
+        function testViolations() {
+            if (!currentSession) {
+                log('❌ No active session to test violations', 'error');
+                return;
+            }
+
+            log('🚨 Triggering test violations...');
+            currentSession.config.enableSimulation = true;
+            currentSession.startViolationSimulation();
+            updateStatus('Running violation simulation...', 'warning');
+        }
+
+        function cleanupSessions() {
+            log('🧹 Cleaning up test sessions...');
+            
+            if (currentSession) {
+                currentSession.destroy();
+                currentSession = null;
+                log('✅ Current session destroyed');
+            }
+
+            updateStatus('Sessions cleaned up', 'success');
+        }
+
+        // Auto-initialize when page loads
+        window.addEventListener('load', () => {
+            log('🚀 Integration test page loaded');
+            log('💡 Click "Start Proctored Session" to begin testing');
+            log('💡 Open admin dashboard at http://localhost:3002 to monitor sessions');
+        });
+
+        // Capture errors
+        window.addEventListener('error', (e) => {
+            log(`❌ Global error: ${e.message}`, 'error');
+        });
+    </script>
+</body>
+</html>

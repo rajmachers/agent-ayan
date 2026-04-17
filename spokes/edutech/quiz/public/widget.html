@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Proctoring Widget</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: transparent;
+            overflow: hidden;
+        }
+
+        /* Widget container */
+        .proctoring-widget {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 300px;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-left: 1px solid #e5e7eb;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            font-size: 14px;
+        }
+
+        /* Minimized state */
+        .proctoring-widget.minimized {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            top: 20px;
+            right: 20px;
+            border: none;
+            background: #1f2937;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Header */
+        .widget-header {
+            background: #1f2937;
+            color: white;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid #374151;
+        }
+
+        .widget-title {
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .minimize-btn {
+            background: none;
+            border: none;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .minimize-btn:hover {
+            background: #374151;
+            color: white;
+        }
+
+        /* Status indicators */
+        .status-section {
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .status-value {
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Connection status */
+        .status-connected { color: #10b981; }
+        .status-disconnected { color: #ef4444; }
+        .status-connecting { color: #f59e0b; }
+
+        /* Credibility score */
+        .credibility-high { color: #10b981; }
+        .credibility-medium { color: #f59e0b; }
+        .credibility-low { color: #ef4444; }
+
+        /* Status dots */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .dot-green { background-color: #10b981; }
+        .dot-yellow { background-color: #f59e0b; }
+        .dot-red { background-color: #ef4444; }
+
+        /* Violations section */
+        .violations-section {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .violations-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .violation-count {
+            background: #fee2e2;
+            color: #dc2626;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .violation-item {
+            background: #fef7f7;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 11px;
+        }
+
+        .violation-item.warning {
+            background: #fffbeb;
+            border-color: #fed7aa;
+        }
+
+        .violation-item.critical {
+            background: #fef2f2;
+            border-color: #fca5a5;
+        }
+
+        .violation-type {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 2px;
+        }
+
+        .violation-time {
+            color: #6b7280;
+            font-size: 10px;
+        }
+
+        /* Alert notifications */
+        .alert-overlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999999;
+            pointer-events: none;
+        }
+
+        .alert-notification {
+            background: #dc2626;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+            margin-bottom: 8px;
+            animation: slideIn 0.3s ease-out;
+            max-width: 400px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .alert-notification.warning {
+            background: #d97706;
+            box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+        }
+
+        .alert-notification.info {
+            background: #2563eb;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        /* Loading states */
+        .loading {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Minimized view */
+        .minimized-icon {
+            color: white;
+            font-size: 24px;
+        }
+
+        /* Hide when minimized */
+        .minimized .widget-header,
+        .minimized .status-section,
+        .minimized .violations-section {
+            display: none;
+        }
+
+        .minimized .minimized-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+
+        .minimized-content {
+            display: none;
+        }
+
+        /* Session info */
+        .session-info {
+            font-size: 10px;
+            color: #6b7280;
+            padding: 8px 16px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+    </style>
+</head>
+<body>
+    <!-- Alert overlay for notifications -->
+    <div id="alert-overlay" class="alert-overlay"></div>
+
+    <!-- Main widget container -->
+    <div id="proctoring-widget" class="proctoring-widget">
+        <!-- Minimized view content -->
+        <div class="minimized-content">
+            <div class="minimized-icon">👁️</div>
+        </div>
+
+        <!-- Widget header -->
+        <div class="widget-header">
+            <div class="widget-title">
+                <span>👁️</span>
+                <span>AI Proctoring</span>
+            </div>
+            <button class="minimize-btn" onclick="toggleMinimize()">−</button>
+        </div>
+
+        <!-- Session information -->
+        <div id="session-info" class="session-info">
+            Session: Not connected
+        </div>
+
+        <!-- Status section -->
+        <div class="status-section">
+            <div class="status-item">
+                <span class="status-label">Connection</span>
+                <span id="connection-status" class="status-value status-disconnected">
+                    <span class="status-dot dot-red"></span>
+                    Disconnected
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Video System</span>
+                <span id="video-status" class="status-value status-connecting">
+                    <span class="loading"></span>
+                    Initializing
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Credibility Score</span>
+                <span id="credibility-score" class="status-value credibility-high">100%</span>
+            </div>
+        </div>
+
+        <!-- Violations section -->
+        <div class="violations-section">
+            <div class="violations-header">
+                <span>Recent Activity</span>
+                <span id="violation-count" class="violation-count">0</span>
+            </div>
+            <div id="violations-list">
+                <div style="text-align: center; color: #6b7280; font-size: 11px; margin-top: 20px;">
+                    No violations detected
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./widget.js"></script>
+</body>
+</html>

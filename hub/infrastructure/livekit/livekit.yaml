@@ -1,0 +1,8 @@
+port: 7880
+keys:
+  devkey: devsecret
+redis:
+  address: hub-redis:6379
+  password: "${REDIS_PASSWORD:-changeme_in_production}"
+logging:
+  level: info

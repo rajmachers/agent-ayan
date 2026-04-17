@@ -1,0 +1,168 @@
+port: 7880
+bind_addresses: [""]
+
+keys:
+  devkey: devsecret
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+
+redis:
+  address: ayan-redis:6379
+
+room:
+  max_duration: 14400
+  empty_timeout: 300
+
+logging:
+  level: info
+      bucket: recordings
+      region: us-east-1
+      access_key: ayan_admin_user
+      secret: ayan_admin_pass_dev
+      force_path_style: true
+
+# Webhook configuration for events
+webhook:
+  # API keys for webhook authentication
+  api_key: ayan_webhook_key_dev
+  # Webhook URLs for different events  
+  urls:
+    - http://ayan-api-gateway:8080/webhooks/livekit/room_started
+    - http://ayan-api-gateway:8080/webhooks/livekit/room_finished
+    - http://ayan-api-gateway:8080/webhooks/livekit/participant_joined
+    - http://ayan-api-gateway:8080/webhooks/livekit/participant_left
+    - http://ayan-api-gateway:8080/webhooks/livekit/track_published
+    - http://ayan-api-gateway:8080/webhooks/livekit/track_unpublished
+    - http://ayan-api-gateway:8080/webhooks/livekit/recording_started
+    - http://ayan-api-gateway:8080/webhooks/livekit/recording_finished
+
+# Logging configuration
+log_level: info
+log_file: /logs/livekit.log
+
+# Development configuration
+development: true
+
+# Audio/Video configuration
+audio:
+  # Audio codec preferences
+  codecs:
+    - opus
+  # Audio levels and quality  
+  level_threshold: -60
+  update_interval: 200ms
+
+video:
+  # Video codec preferences (VP8 for broad compatibility)
+  codecs:
+    - vp8
+    - h264
+  # Video quality presets
+  presets:
+    # High quality for proctoring (face detection, screen capture)
+    - quality: high
+      width: 1280
+      height: 720
+      framerate: 30
+      bitrate: 2000000
+    # Medium quality for bandwidth-constrained environments  
+    - quality: medium
+      width: 854
+      height: 480
+      framerate: 24
+      bitrate: 1000000
+    # Low quality fallback
+    - quality: low
+      width: 640
+      height: 360
+      framerate: 15
+      bitrate: 500000
+
+# Node configuration for distributed/clustered deployments
+node:
+  ip: ""
+  # Unique node identifier
+  id: "ayan-livekit-node-1"
+
+# Health check configuration  
+health:
+  enabled: true
+  port: 8080
+
+# Prometheus metrics
+prometheus:
+  enabled: true
+  port: 9090
+
+# TLS/SSL configuration (disabled for development)
+tls:
+  enabled: false
+  
+# Ingress configuration
+ingress:
+  # HTTP ingress for webhooks and health checks
+  http_relay_enabled: false
+  rtmp_enabled: false
+  sip_enabled: false
+
+# Limits and quotas
+limits:
+  # Maximum participants per room
+  max_participants_per_room: 50
+  # Maximum rooms per node
+  max_rooms_per_node: 1000
+  # Maximum tracks per participant
+  max_tracks_per_participant: 10
+  # Bandwidth limits (bytes per second)
+  max_bandwidth_per_participant: 10485760 # 10MB/s
+
+# Region configuration for load balancing
+region: us-east-1
+
+# Custom participant properties for proctoring
+participant:
+  # Default permissions for exam participants
+  default_permissions:
+    can_publish: true
+    can_subscribe: true
+    can_publish_data: true
+    # Restrict participant actions during exams
+    can_update_metadata: false
+    hidden: false
+    recorder: false
+
+# Data channel configuration for proctoring events
+data:
+  enabled: true
+  # Forward data messages to webhook endpoints
+  forward_to_webhook: true
+  
+# Security configuration
+security:  
+  # Enable strict validation of JWT tokens
+  strict_jwt_validation: true
+  # Require secure connections in production
+  require_secure_transport: false
+  # Enable rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 1000
+
+# Performance tuning
+performance:
+  # Number of CPU cores to use for encoding/decoding
+  num_cpus: 0 # auto-detect
+  # Memory management
+  memory:
+    track_allocation: false
+    
+# Experimental features (use with caution)
+experimental:
+  # Enable advanced audio processing
+  audio_processing: true
+  # Enable experimental video processing
+  video_processing: false

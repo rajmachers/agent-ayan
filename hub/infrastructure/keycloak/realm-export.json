@@ -1,0 +1,405 @@
+{
+  "id": "ayan-admin",
+  "realm": "ayan-admin",
+  "displayName": "Ayan.ai System Administration",
+  "displayNameHtml": "<strong>Ayan.ai</strong> System Administration",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "rememberMe": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "defaultRoles": ["offline_access", "uma_authorization"],
+  "requiredCredentials": ["password"],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "clients": [
+    {
+      "id": "ayan-admin-web",
+      "clientId": "ayan-admin-web", 
+      "name": "Ayan.ai Admin Web Application",
+      "description": "Administrative web interface for Ayan.ai platform management",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ayan-admin-web-secret-dev",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "authorizationServicesEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "https://ayan.nunmai.local/*",
+        "https://*.ayan.nunmai.local/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "https://ayan.nunmai.local", 
+        "https://*.ayan.nunmai.local"
+      ],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "false", 
+        "saml.multivalued.roles": "false",
+        "saml.encrypt": "false",
+        "saml.server.signature": "false",
+        "saml.server.signature.keyinfo.ext": "false",
+        "exclude.session.state.from.auth.response": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "saml.artifact.binding": "false",
+        "backchannel.logout.session.required": "true",
+        "client_credentials.use_refresh_token": "false",
+        "saml_force_name_id_format": "false",
+        "require.pushed.authorization.requests": "false",
+        "saml.client.signature": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "saml.authnstatement": "false",
+        "display.on.consent.screen": "false",
+        "saml.onetimeuse.condition": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "profile", 
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    },
+    {
+      "id": "ayan-api-gateway",
+      "clientId": "ayan-api-gateway",
+      "name": "Ayan.ai API Gateway",
+      "description": "Internal API Gateway client for service authentication",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "ayan-gateway-secret-dev",
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "oidc.ciba.grant.enabled": "false",
+        "client_credentials.use_refresh_token": "false",
+        "backchannel.logout.session.required": "false",
+        "require.pushed.authorization.requests": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "display.on.consent.screen": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "profile",
+        "roles"
+      ],
+      "optionalClientScopes": []
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "id": "super-admin",
+        "name": "super-admin",
+        "description": "Super administrator with full platform access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "ayan-admin"
+      },
+      {
+        "id": "org-admin",
+        "name": "org-admin", 
+        "description": "Organization administrator with tenant management access",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "ayan-admin"
+      },
+      {
+        "id": "examiner", 
+        "name": "examiner",
+        "description": "Exam creator and manager role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "ayan-admin"
+      },
+      {
+        "id": "proctor",
+        "name": "proctor",
+        "description": "Live exam monitoring and intervention role", 
+        "composite": false,
+        "clientRole": false,
+        "containerId": "ayan-admin"
+      },
+      {
+        "id": "viewer",
+        "name": "viewer",
+        "description": "Read-only access to exam data and reports",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "ayan-admin"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "super-admins",
+      "name": "Super Administrators", 
+      "path": "/Super Administrators",
+      "realmRoles": ["super-admin"],
+      "clientRoles": {},
+      "attributes": {
+        "description": ["Platform super administrators with full system access"]
+      }
+    },
+    {
+      "id": "org-administrators", 
+      "name": "Organization Administrators",
+      "path": "/Organization Administrators",
+      "realmRoles": ["org-admin"],
+      "clientRoles": {},
+      "attributes": {
+        "description": ["Organization-level administrators"]
+      }
+    }
+  ],
+  "users": [
+    {
+      "id": "admin-001",
+      "username": "admin@ayan.nunmai.local",
+      "email": "admin@ayan.nunmai.local",
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Administrator",
+      "enabled": true,
+      "totp": false,
+      "credentials": [
+        {
+          "id": "admin-password",
+          "type": "password",
+          "userLabel": "Administrator Password",
+          "createdDate": 1704067200000,
+          "secretData": "{\"value\":\"$2a$12$4r5PSqL9nC8rjKiRcXb0/.yQ3K2nF2rJJqrfqhGvtq.4.MpQiL6wG\",\"salt\":\"$2a$12$4r5PSqL9nC8rjKiRcXb0/.\"}",
+          "credentialData": "{\"hashIterations\":27500,\"algorithm\":\"bcrypt\"}"
+        }
+      ],
+      "groups": ["/Super Administrators"],
+      "realmRoles": ["super-admin", "offline_access", "uma_authorization"],
+      "clientRoles": {
+        "account": ["manage-account", "view-profile"]
+      },
+      "attributes": {
+        "org_id": ["00000000-0000-0000-0000-000000000000"],
+        "is_super_admin": ["true"],
+        "locale": ["en"]
+      }
+    },
+    {
+      "id": "demo-admin-001",
+      "username": "admin@demo-university.edu", 
+      "email": "admin@demo-university.edu",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "Administrator",
+      "enabled": true,
+      "totp": false,
+      "credentials": [
+        {
+          "id": "demo-admin-password",
+          "type": "password",
+          "userLabel": "Demo Admin Password",
+          "createdDate": 1704067200000,
+          "secretData": "{\"value\":\"$2a$12$VhRA5N2UOtlk.FJzA3rWauEpLKTF4G2tKNgAFwzRaV.X6ZFsJ1oZm\",\"salt\":\"$2a$12$VhRA5N2UOtlk.FJzA3rWau\"}",
+          "credentialData": "{\"hashIterations\":27500,\"algorithm\":\"bcrypt\"}"
+        }
+      ],
+      "groups": ["/Organization Administrators"],
+      "realmRoles": ["org-admin", "offline_access", "uma_authorization"],
+      "clientRoles": {
+        "account": ["manage-account", "view-profile"]
+      },
+      "attributes": {
+        "org_id": ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"],
+        "org_slug": ["demo-university"],
+        "is_super_admin": ["false"],
+        "locale": ["en"]
+      }
+    }
+  ],
+  "identityProviders": [],
+  "keycloakVersion": "24.0.0",
+  "userManagedAccessAllowed": false,
+  "attributes": {
+    "frontendUrl": "https://auth.ayan.nunmai.local",
+    "adminEventsEnabled": "true",
+    "adminEventsDetailsEnabled": "true"
+  },
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "es", "fr", "de"],
+  "defaultLocale": "en",
+  "loginTheme": "ayan-ai",
+  "accountTheme": "ayan-ai", 
+  "adminTheme": "keycloak",
+  "emailTheme": "ayan-ai",
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [
+    "SEND_VERIFY_EMAIL",
+    "SEND_RESET_PASSWORD", 
+    "REMOVE_TOTP",
+    "REVOKE_GRANT",
+    "LOGIN_ERROR",
+    "CLIENT_LOGIN",
+    "RESET_PASSWORD_ERROR",
+    "IMPERSONATE_ERROR",
+    "CODE_TO_TOKEN_ERROR",
+    "CUSTOM_REQUIRED_ACTION",
+    "OAUTH2_DEVICE_CODE_TO_TOKEN_ERROR",
+    "RESTART_AUTHENTICATION",
+    "UPDATE_TOTP_ERROR",
+    "LOGIN",
+    "UPDATE_PASSWORD_ERROR", 
+    "CLIENT_INITIATED_ACCOUNT_LINKING",
+    "TOKEN_EXCHANGE",
+    "LOGOUT",
+    "REGISTER",
+    "CLIENT_REGISTER",
+    "IDENTITY_PROVIDER_LINK_ACCOUNT",
+    "DELETE_ACCOUNT_ERROR",
+    "CLIENT_DELETE",
+    "IDENTITY_PROVIDER_FIRST_LOGIN",
+    "VERIFY_EMAIL",
+    "CLIENT_DELETE_ERROR",
+    "CLIENT_LOGIN_ERROR",
+    "RESTART_AUTHENTICATION_ERROR",
+    "EXECUTE_ACTIONS",
+    "REMOVE_FEDERATED_IDENTITY_ERROR",
+    "TOKEN_EXCHANGE_ERROR", 
+    "PERMISSION_TOKEN",
+    "SEND_IDENTITY_PROVIDER_LINK_ERROR",
+    "EXECUTE_ACTION_TOKEN_ERROR",
+    "SEND_VERIFY_EMAIL_ERROR",
+    "EXECUTE_ACTIONS_ERROR",
+    "REMOVE_FEDERATED_IDENTITY",
+    "OAUTH2_DEVICE_AUTH",
+    "IDENTITY_PROVIDER_POST_LOGIN",
+    "IDENTITY_PROVIDER_LINK_ACCOUNT_ERROR",
+    "UPDATE_EMAIL",
+    "REGISTER_ERROR",
+    "REVOKE_GRANT_ERROR",
+    "LOGOUT_ERROR",
+    "UPDATE_EMAIL_ERROR",
+    "CLIENT_UPDATE_ERROR",
+    "UPDATE_PROFILE_ERROR",
+    "FEDERATED_IDENTITY_LINK_ERROR",
+    "CLIENT_REGISTER_ERROR", 
+    "SEND_IDENTITY_PROVIDER_LINK",
+    "SEND_RESET_PASSWORD_ERROR",
+    "CLIENT_INITIATED_ACCOUNT_LINKING_ERROR",
+    "OAUTH2_DEVICE_VERIFY_USER_CODE",
+    "IMPERSONATE",
+    "CUSTOM_REQUIRED_ACTION_ERROR",
+    "UPDATE_PROFILE", 
+    "FEDERATED_IDENTITY_LINK",
+    "CLIENT_UPDATE",
+    "REMOVE_TOTP_ERROR",
+    "VERIFY_EMAIL_ERROR",
+    "RESET_PASSWORD",
+    "CLIENT_INITIATED_ACCOUNT_LINKING",
+    "OAUTH2_DEVICE_CODE_TO_TOKEN",
+    "UPDATE_PASSWORD",
+    "UPDATE_TOTP",
+    "DELETE_ACCOUNT",
+    "GRANT_CONSENT_ERROR",
+    "GRANT_CONSENT",
+    "IDENTITY_PROVIDER_POST_LOGIN_ERROR",
+    "OAUTH2_DEVICE_VERIFY_USER_CODE_ERROR",
+    "OAUTH2_DEVICE_AUTH_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "components": {
+    "org.keycloak.storage.UserStorageProvider": [],
+    "org.keycloak.keys.KeyProvider": [
+      {
+        "id": "rsa-generated",
+        "name": "rsa-generated",
+        "providerId": "rsa-generated", 
+        "subComponents": {},
+        "config": {
+          "priority": ["100"],
+          "enabled": ["true"],
+          "active": ["true"],
+          "keySize": ["2048"]
+        }
+      },
+      {
+        "id": "hmac-generated",
+        "name": "hmac-generated", 
+        "providerId": "hmac-generated",
+        "subComponents": {},
+        "config": {
+          "priority": ["100"],
+          "enabled": ["true"],
+          "active": ["true"],
+          "secretSize": ["64"]
+        }
+      },
+      {
+        "id": "aes-generated",
+        "name": "aes-generated",
+        "providerId": "aes-generated",
+        "subComponents": {},
+        "config": {
+          "priority": ["100"],
+          "enabled": ["true"],
+          "active": ["true"],
+          "secretSize": ["16"]
+        }
+      }
+    ]
+  },
+  "smtpServer": {
+    "host": "localhost",
+    "port": "1025",
+    "from": "noreply@ayan.nunmai.local",
+    "fromDisplayName": "Ayan.ai Platform",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  }
+}

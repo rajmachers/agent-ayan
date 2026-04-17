@@ -1,0 +1,94 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # ── Self-monitoring ──
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ── Infrastructure ──
+  - job_name: 'hub-infrastructure'
+    static_configs:
+      - targets:
+        - 'hub-postgres:5432'
+        - 'hub-redis:6379'
+        - 'hub-minio:9000'
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  - job_name: 'hub-livekit'
+    static_configs:
+      - targets: ['hub-livekit:7880']
+    scrape_interval: 15s
+
+  - job_name: 'hub-ollama'
+    static_configs:
+      - targets: ['hub-ollama:11434']
+    scrape_interval: 30s
+    metrics_path: '/api/tags'
+
+  - job_name: 'hub-qdrant'
+    static_configs:
+      - targets: ['hub-qdrant:6333']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # ── Hub Core Services ──
+  - job_name: 'hub-gateway'
+    static_configs:
+      - targets: ['hub-gateway:3000']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+
+  - job_name: 'hub-control-plane'
+    static_configs:
+      - targets: ['hub-control-plane:3000']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+
+  - job_name: 'hub-websocket'
+    static_configs:
+      - targets: ['hub-websocket:3000']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+
+  - job_name: 'hub-session-manager'
+    static_configs:
+      - targets: ['hub-session-manager:8181']
+    scrape_interval: 30s
+
+  # ── AI Services ──
+  - job_name: 'hub-ai-services'
+    static_configs:
+      - targets:
+        - 'hub-ai-vision:8001'
+        - 'hub-ai-audio:8002'
+        - 'hub-ai-behavior:8003'
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  - job_name: 'hub-agent-runtime'
+    static_configs:
+      - targets: ['hub-agent-runtime:3000']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+
+  # ── Hybrid Services ──
+  - job_name: 'hub-hybrid-services'
+    static_configs:
+      - targets:
+        - 'hub-gatekeeper:3000'
+        - 'hub-ghost-proctor:3000'
+        - 'hub-decision-support:3000'
+        - 'hub-learning-engine:3000'
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # ── Playback Service ──
+  - job_name: 'hub-playback'
+    static_configs:
+      - targets: ['hub-playback:3004']
+    scrape_interval: 30s
+    metrics_path: '/metrics'

@@ -1,0 +1,40 @@
+# EduTech Spoke Configuration
+# Defines how this spoke connects to the Ayan.ai Hub.
+
+spoke:
+  id: edutech
+  name: EduTech Proctoring
+  description: AI-powered exam proctoring for educational institutions
+  version: 1.0.0
+
+hub:
+  gatewayUrl: ${NEXT_PUBLIC_HUB_GATEWAY_URL:-http://localhost:14001}
+  websocketUrl: ${NEXT_PUBLIC_HUB_WEBSOCKET_URL:-ws://localhost:14801}
+
+features:
+  - auto-proctoring        # Phase 6 autonomous AI monitoring
+  - hybrid-proctoring      # Phase 7 human-in-the-loop
+  - gatekeeper-entry       # Human approval for exam entry
+  - ghost-proctor          # Multi-session supervisor view
+  - ai-insights            # Decision support for proctors
+  - learning-feedback      # Human corrections → AI improvement
+
+apps:
+  admin:
+    port: 3001
+    description: Proctoring admin dashboard with Phase 7 proctor console
+  quiz:
+    port: 3002
+    description: Mode-aware quiz application (auto/hybrid)
+  simulator:
+    port: 3003
+    description: Test scenario runner against live hub
+
+database:
+  schema_prefix: edu_
+  tables:
+    - edu_exams
+    - edu_questions
+    - edu_candidates
+    - edu_exam_configs
+    - edu_results

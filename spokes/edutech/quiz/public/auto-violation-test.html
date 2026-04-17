@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Violation Test - Auto Execute</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+        .status { padding: 15px; margin: 10px 0; border-radius: 6px; border: 1px solid; }
+        .success { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+        .error { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+        .info { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+        .warning { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+        #logs { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Auto Violation Test</h1>
+    
+    <div class="status info">
+        <strong>Status:</strong> <span id="status">Initializing...</span>
+    </div>
+
+    <h3>Live Logs:</h3>
+    <div id="logs"></div>
+
+    <script src="/proctor-sdk-p6.js"></script>
+    <script>
+        const statusEl = document.getElementById('status');
+        const logsEl = document.getElementById('logs');
+        
+        let proctorInstance = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+            logsEl.innerHTML += `<div>[${timestamp}] ${emoji} ${message}</div>`;
+            logsEl.scrollTop = logsEl.scrollHeight;
+            console.log(`[AUTO-TEST] ${message}`);
+        }
+
+        function updateStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            const parent = statusEl.parentElement;
+            parent.className = `status ${type}`;
+        }
+
+        function startTest() {
+            log('🚀 Starting automated violation test...');
+            updateStatus('Creating proctoring session...', 'info');
+
+            if (!window.ProctorSDK) {
+                log('❌ ProctorSDK not available', 'error');
+                updateStatus('SDK not loaded', 'error');
+                return;
+            }
+
+            try {
+                proctorInstance = window.ProctorSDK.init({
+                    candidateId: 'student002@cs.university.edu',
+                    examId: 'auto-violation-test',
+                    organizationId: '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94', // CS Department
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: true, // Enable violations
+                    autoStart: true
+                });
+
+                proctorInstance.on('session:started', (data) => {
+                    log(`✅ Session started! ID: ${data.sessionId || 'unknown'}`, 'success');
+                    updateStatus('Session active - Violations starting in 3 seconds', 'success');
+                    
+                    // Trigger violations immediately after session start
+                    setTimeout(() => {
+                        log('🎭 Triggering custom violation test sequence...', 'warning');
+                        triggerTestViolations();
+                    }, 2000);
+                });
+
+                proctorInstance.on('violation', (violation) => {
+                    log(`🚨 VIOLATION: ${violation.description} (${violation.type})`, 'error');
+                });
+
+                log('📝 Session initialization requested');
+
+            } catch (error) {
+                log(`❌ Failed to start test: ${error.message}`, 'error');
+                updateStatus('Test failed to start', 'error');
+            }
+        }
+
+        function triggerTestViolations() {
+            if (!proctorInstance) return;
+
+            const testViolations = [
+                { type: 'tab_switch', description: 'Tab focus lost', severity: 'warning' },
+                { type: 'face_not_visible', description: 'Face not visible', severity: 'critical' },
+                { type: 'background_noise', description: 'Audio detected', severity: 'info' },
+                { type: 'multiple_faces', description: 'Multiple people', severity: 'critical' }
+            ];
+
+            let index = 0;
+            const interval = setInterval(() => {
+                if (index >= testViolations.length) {
+                    clearInterval(interval);
+                    log('🎯 All test violations completed', 'success');
+                    updateStatus('Test complete - Check admin dashboard', 'success');
+                    return;
+                }
+
+                const violation = testViolations[index];
+                log(`⚡ Triggering violation: ${violation.description}`, 'warning');
+                proctorInstance.handleViolation(violation);
+                index++;
+            }, 3000);
+        }
+
+        // Auto-start test when page loads
+        window.addEventListener('load', () => {
+            log('🚀 Auto-test page loaded');
+            setTimeout(() => {
+                startTest();
+            }, 2000);
+        });
+
+        // Capture errors
+        window.addEventListener('error', (e) => {
+            log(`❌ Global error: ${e.message}`, 'error');
+        });
+    </script>
+</body>
+</html>

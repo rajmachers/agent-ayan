@@ -1,0 +1,11 @@
+-- Spoke-specific database tables template
+-- Replace 'your_' prefix with your spoke's schema prefix.
+
+-- Example: domain-specific entities
+-- CREATE TABLE your_assessments (
+--   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--   organization_id UUID REFERENCES hub_organizations(id),
+--   title VARCHAR(255) NOT NULL,
+--   exam_mode VARCHAR(20) DEFAULT 'auto-proctor',
+--   created_at TIMESTAMP DEFAULT NOW()
+-- );

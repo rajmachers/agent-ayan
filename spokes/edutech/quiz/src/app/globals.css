@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .quiz-container {
+    @apply min-h-screen flex flex-col;
+  }
+  
+  .question-card {
+    @apply bg-white border border-gray-200 rounded-lg p-6 shadow-sm;
+  }
+  
+  .option-button {
+    @apply w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-primary-500 transition-colors duration-200;
+  }
+  
+  .option-button.selected {
+    @apply bg-primary-50 border-primary-500 text-primary-900;
+  }
+  
+  .timer-warning {
+    @apply text-warning-600 animate-pulse;
+  }
+  
+  .timer-critical {
+    @apply text-error-600 animate-pulse;
+  }
+}

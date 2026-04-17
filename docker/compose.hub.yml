@@ -1,0 +1,479 @@
+# ═══════════════════════════════════════════════════════════════
+# AGENT-AYAN HUB — Docker Compose (Hub Services Only)
+# This runs the intelligence hub. Spokes layer on top of this.
+# Usage: docker compose -f docker/compose.hub.yml up --build
+# ═══════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # ── Infrastructure ──
+  hub-postgres:
+    image: postgres:15-alpine
+    container_name: hub-postgres
+    ports:
+      - "14541:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_ayan_db}
+      POSTGRES_USER: ${POSTGRES_USER:-ayan_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    volumes:
+      - hub_postgres_data:/var/lib/postgresql/data
+      - ../hub/infrastructure/database/hub-schema.sql:/docker-entrypoint-initdb.d/01-hub-schema.sql
+    networks:
+      - ayan-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ayan_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hub-redis:
+    image: redis:7.0-alpine
+    container_name: hub-redis
+    ports:
+      - "14631:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme_in_production}
+    volumes:
+      - hub_redis_data:/data
+    networks:
+      - ayan-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme_in_production}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hub-keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    container_name: hub-keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      KC_DB_USERNAME: ${POSTGRES_USER:-ayan_admin}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+      KC_DB_SCHEMA: keycloak
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme_in_production}
+      KC_HTTP_PORT: 8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      JAVA_OPTS: "-Xms64m -Xmx512m -XX:+UseContainerSupport"
+    ports:
+      - "14080:8080"
+    command:
+      - start-dev
+      - --import-realm
+    volumes:
+      - ../hub/infrastructure/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - ayan-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  hub-livekit:
+    image: livekit/livekit-server:v1.5.2
+    container_name: hub-livekit
+    volumes:
+      - ../hub/infrastructure/livekit/livekit.yaml:/livekit.yaml:ro
+    command: ["--config", "/livekit.yaml"]
+    ports:
+      - "14780:7880"
+      - "14781:7881"
+      - "50200-50300:50000-50100/udp"
+    depends_on:
+      hub-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:7880 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-minio:
+    image: minio/minio:latest
+    container_name: hub-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ayan_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_in_production}
+    ports:
+      - "14900:9000"
+      - "14990:9090"
+    volumes:
+      - hub_minio_data:/data
+    command: server /data --console-address ":9090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-minio-init:
+    image: minio/mc:latest
+    container_name: hub-minio-init
+    volumes:
+      - ../hub/infrastructure/minio/init-buckets.sh:/init.sh:ro
+    entrypoint: ["sh", "/init.sh"]
+    depends_on:
+      hub-minio:
+        condition: service_healthy
+    networks:
+      - ayan-network
+
+  hub-ollama:
+    image: ollama/ollama:latest
+    container_name: hub-ollama
+    ports:
+      - "14434:11434"
+    volumes:
+      - hub_ollama_data:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - ayan-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  hub-qdrant:
+    image: qdrant/qdrant:latest
+    container_name: hub-qdrant
+    ports:
+      - "14333:6333"
+      - "14334:6334"
+    volumes:
+      - hub_qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  # ── Core Services ──
+  hub-gateway:
+    build: ../hub/gateway
+    container_name: hub-gateway
+    ports:
+      - "14001:3000"
+    environment:
+      PORT: 3000
+      HUB_CONTROL_PLANE_URL: http://hub-control-plane:3000
+      HUB_GATEKEEPER_URL: http://hub-gatekeeper:3000
+      HUB_GHOST_PROCTOR_URL: http://hub-ghost-proctor:3000
+      HUB_DECISION_SUPPORT_URL: http://hub-decision-support:3000
+      HUB_LEARNING_ENGINE_URL: http://hub-learning-engine:3000
+      HUB_AGENT_RUNTIME_URL: http://hub-agent-runtime:3000
+      HUB_AI_VISION_URL: http://hub-ai-vision:3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001,http://localhost:3002,http://localhost:3003}
+      JWT_SECRET: ${JWT_SECRET:-changeme_32_char_random_secret_here}
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-control-plane:
+    build: ../hub/control-plane
+    container_name: hub-control-plane
+    ports:
+      - "14002:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-websocket:
+    build: ../hub/infrastructure/websocket
+    container_name: hub-websocket
+    ports:
+      - "14801:3000"
+    environment:
+      PORT: 3000
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3001,http://localhost:3002,http://localhost:3003}
+      JWT_SECRET: ${JWT_SECRET:-changeme_32_char_random_secret_here}
+    depends_on:
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-session-manager:
+    build: ../hub/infrastructure/session-manager
+    container_name: hub-session-manager
+    ports:
+      - "14181:8181"
+    environment:
+      PORT: 8181
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  # ── AI Services ──
+  hub-ai-vision:
+    build: ../hub/ai-services/vision
+    container_name: hub-ai-vision
+    ports:
+      - "14101:8001"
+    environment:
+      PORT: 8001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+    networks:
+      - ayan-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  hub-ai-audio:
+    build: ../hub/ai-services/audio
+    container_name: hub-ai-audio
+    ports:
+      - "14102:8002"
+    environment:
+      PORT: 8002
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-ai-behavior:
+    build: ../hub/ai-services/behavior
+    container_name: hub-ai-behavior
+    ports:
+      - "14103:8003"
+    environment:
+      PORT: 8003
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-agent-runtime:
+    build: ../hub/ai-services/agent-runtime
+    container_name: hub-agent-runtime
+    ports:
+      - "14201:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      HUB_WEBSOCKET_URL: http://hub-websocket:3000
+      HUB_AI_VISION_URL: http://hub-ai-vision:8001
+      OLLAMA_URL: http://hub-ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-mistral:7b}
+      LIVEKIT_URL: http://hub-livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      QDRANT_URL: http://hub-qdrant:6333
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  # ── Hybrid Services ──
+  hub-gatekeeper:
+    build: ../hub/hybrid-services/gatekeeper
+    container_name: hub-gatekeeper
+    ports:
+      - "14301:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-ghost-proctor:
+    build: ../hub/hybrid-services/ghost-proctor
+    container_name: hub-ghost-proctor
+    ports:
+      - "14302:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      HUB_AI_VISION_URL: http://hub-ai-vision:8001
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-decision-support:
+    build: ../hub/hybrid-services/decision-support
+    container_name: hub-decision-support
+    ports:
+      - "14303:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  hub-learning-engine:
+    build: ../hub/hybrid-services/learning-engine
+    container_name: hub-learning-engine
+    ports:
+      - "14304:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  # ── Playback & Audit ──
+  hub-playback:
+    build: ../hub/playback-service
+    container_name: hub-playback
+    ports:
+      - "14004:3004"
+    environment:
+      PORT: 3004
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      STORAGE_TYPE: minio
+      MINIO_ENDPOINT: hub-minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ayan_minio_admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-changeme_in_production}
+      MINIO_BUCKET: recordings
+      MINIO_USE_SSL: "false"
+      LIVEKIT_WS_URL: ${LIVEKIT_WS_URL:-ws://hub-livekit:7880}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      AI_VISION_URL: http://hub-ai-vision:8001
+      AI_AUDIO_URL: http://hub-ai-audio:8002
+      AI_BEHAVIOR_URL: http://hub-ai-behavior:8003
+      CORS_ORIGINS: ${CORS_ORIGIN:-http://localhost:3001,http://localhost:3002,http://localhost:3003}
+    depends_on:
+      hub-postgres:
+        condition: service_healthy
+      hub-redis:
+        condition: service_healthy
+      hub-minio:
+        condition: service_healthy
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  # ── Monitoring (optional profile) ──
+  hub-prometheus:
+    image: prom/prometheus:latest
+    container_name: hub-prometheus
+    ports:
+      - "14091:9090"
+    volumes:
+      - ../hub/infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - hub_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - ayan-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  hub-grafana:
+    image: grafana/grafana:latest
+    container_name: hub-grafana
+    ports:
+      - "14030:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-changeme_in_production}
+    volumes:
+      - hub_grafana_data:/var/lib/grafana
+      - ../hub/infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - hub-prometheus
+    networks:
+      - ayan-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+networks:
+  ayan-network:
+    driver: bridge
+    name: ayan-network
+
+volumes:
+  hub_postgres_data:
+  hub_redis_data:
+  hub_minio_data:
+  hub_ollama_data:
+  hub_qdrant_data:
+  hub_prometheus_data:
+  hub_grafana_data:

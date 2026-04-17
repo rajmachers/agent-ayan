@@ -1,0 +1,12 @@
+{
+  "name": "@ayan/hub-session-manager",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  }
+}

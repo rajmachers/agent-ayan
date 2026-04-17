@@ -1,0 +1,152 @@
+{
+  "organisation": {
+    "id": "org_cs_dept_2026",
+    "external_id": "tao_cs_dept_001",
+    "name": "Computer Science Department",
+    "slug": "cs-dept",
+    "logo_url": "https://university.edu/assets/cs-dept-logo.png",
+    "theme": {
+      "primary_color": "#1e40af",
+      "secondary_color": "#f59e0b",
+      "background_color": "#f8fafc",
+      "text_color": "#1f2937",
+      "font_family": "Inter, sans-serif",
+      "organization_name": "Computer Science Department - University",
+      "support_email": "exams@cs.university.edu",
+      "support_phone": "+1-555-CS-EXAMS",
+      "verification_messages": {
+        "welcome": "Welcome to your Computer Science Department exam verification",
+        "camera_check": "Please ensure your camera is working properly for this CS exam",
+        "id_capture": "Please upload a clear photo of your University student ID",
+        "room_scan": "Show your exam environment as per CS Department guidelines",
+        "rules_title": "CS Department Examination Policies",
+        "completion": "Thank you. Your CS exam has been submitted successfully to the department."
+      }
+    },
+    "created_at": "2026-04-05T18:13:38.105Z"
+  },
+  "exam": {
+    "id": "fin_lit_2026",
+    "external_id": "tao_exam_fin_lit_001",
+    "org_id": "org_cs_dept_2026",
+    "title": "Financial Literacy Challenge 2026",
+    "description": "Comprehensive assessment of financial concepts and principles for Computer Science students",
+    "duration_min": 15,
+    "instructions": "This quiz tests your understanding of basic financial concepts. You have 15 minutes to complete 10 questions. Each question is worth 10 points. A score of 70% or higher is required to pass.",
+    "exam_app_url": "http://localhost:3001",
+    "addons_config": {
+      "face_verify": true,
+      "id_verify": true,
+      "env_scan": true,
+      "screen_record": true,
+      "browser_lock": true
+    },
+    "metrics_config": {
+      "face_detection_weight": 0.25,
+      "browser_violation_weight": 0.3,
+      "audio_violation_weight": 0.2,
+      "motion_violation_weight": 0.25
+    },
+    "rules_config": {
+      "allow_calculator": false,
+      "allow_notes": false,
+      "allow_breaks": false,
+      "max_violations": 5
+    },
+    "callback_url": null,
+    "created_at": "2026-04-05T18:13:38.105Z"
+  },
+  "batches": [
+    {
+      "id": "batch_fall_2026",
+      "external_id": "tao_batch_fall_001",
+      "exam_id": "fin_lit_2026",
+      "name": "Fall 2026 CS Cohort",
+      "description": "Financial literacy assessment for Fall 2026 Computer Science students",
+      "created_at": "2026-04-05T18:13:38.105Z"
+    },
+    {
+      "id": "batch_spring_2027",
+      "external_id": "tao_batch_spring_001",
+      "exam_id": "fin_lit_2026",
+      "name": "Spring 2027 CS Cohort",
+      "description": "Financial literacy assessment for Spring 2027 Computer Science students",
+      "created_at": "2026-04-05T18:13:38.105Z"
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "delivery_001",
+      "external_id": "tao_delivery_001",
+      "batch_id": "batch_fall_2026",
+      "scheduled_at": "2026-04-06T18:13:38.105Z",
+      "end_at": "2026-04-06T18:13:38.105Z",
+      "status": "scheduled",
+      "candidate_ids": [
+        "candidate_001",
+        "candidate_002",
+        "candidate_003"
+      ],
+      "created_at": "2026-04-05T18:13:38.105Z"
+    },
+    {
+      "id": "delivery_002",
+      "external_id": "tao_delivery_002",
+      "batch_id": "batch_fall_2026",
+      "scheduled_at": "2026-04-08T18:13:38.105Z",
+      "end_at": "2026-04-08T18:13:38.105Z",
+      "status": "scheduled",
+      "candidate_ids": [
+        "candidate_004",
+        "candidate_005"
+      ],
+      "created_at": "2026-04-05T18:13:38.105Z"
+    },
+    {
+      "id": "delivery_003",
+      "external_id": "tao_delivery_003",
+      "batch_id": "batch_spring_2027",
+      "scheduled_at": "2026-04-12T18:13:38.105Z",
+      "end_at": "2026-04-12T18:13:38.105Z",
+      "status": "scheduled",
+      "candidate_ids": [
+        "candidate_006",
+        "candidate_007",
+        "candidate_008"
+      ],
+      "created_at": "2026-04-05T18:13:38.105Z"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "session_001",
+      "external_id": "tao_session_001",
+      "delivery_id": "delivery_001",
+      "batch_id": "batch_fall_2026",
+      "exam_id": "fin_lit_2026",
+      "candidate_id": "candidate_001",
+      "room_id": null,
+      "agent_id": null,
+      "status": "created",
+      "credibility_score": null,
+      "risk_level": null,
+      "started_at": null,
+      "ended_at": null
+    },
+    {
+      "id": "session_002",
+      "external_id": "tao_session_002",
+      "delivery_id": "delivery_001",
+      "batch_id": "batch_fall_2026",
+      "exam_id": "fin_lit_2026",
+      "candidate_id": "candidate_002",
+      "room_id": null,
+      "agent_id": null,
+      "status": "created",
+      "credibility_score": null,
+      "risk_level": null,
+      "started_at": null,
+      "ended_at": null
+    }
+  ]
+}

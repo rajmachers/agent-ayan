@@ -1,0 +1,38 @@
+{
+  "name": "agent-ayan",
+  "version": "1.0.0",
+  "description": "Ayan.ai — Unified Intelligence Hub with Industry Spokes",
+  "private": true,
+  "workspaces": [
+    "hub/gateway",
+    "hub/control-plane",
+    "hub/ai-services/*",
+    "hub/hybrid-services/*",
+    "hub/infrastructure/websocket",
+    "hub/sdk/*",
+    "hub/analytics",
+    "spokes/*/admin",
+    "spokes/*/quiz",
+    "spokes/*/simulator",
+    "spokes/*/client-app"
+  ],
+  "scripts": {
+    "hub:dev": "docker compose -f docker/compose.hub.yml up --build",
+    "hub:down": "docker compose -f docker/compose.hub.yml down",
+    "spoke:edutech": "docker compose -f docker/compose.hub.yml -f docker/compose.edutech.yml up --build",
+    "spoke:edutech:down": "docker compose -f docker/compose.hub.yml -f docker/compose.edutech.yml down",
+    "full:dev": "docker compose -f docker/compose.full.yml up --build",
+    "full:down": "docker compose -f docker/compose.full.yml down",
+    "lint": "eslint 'hub/**/src/**/*.ts' --max-warnings 50",
+    "test": "echo 'TODO: workspace-wide tests'"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "typescript": "^5.3.0"
+  }
+}

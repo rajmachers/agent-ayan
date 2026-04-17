@@ -1,0 +1,30 @@
+# Spoke Configuration Template
+# Copy and customize for your industry vertical.
+
+spoke:
+  id: your-spoke-id          # Unique identifier (lowercase, no spaces)
+  name: Your Spoke Name       # Display name
+  description: Brief description of this spoke's purpose
+  version: 1.0.0
+
+hub:
+  gatewayUrl: ${NEXT_PUBLIC_HUB_GATEWAY_URL:-http://localhost:14001}
+  websocketUrl: ${NEXT_PUBLIC_HUB_WEBSOCKET_URL:-ws://localhost:14801}
+
+features:
+  - auto-proctoring          # Always available from hub
+  - hybrid-proctoring        # Enable if human oversight needed
+  # - gatekeeper-entry       # Uncomment for human entry approval
+  # - ghost-proctor          # Uncomment for multi-session supervision
+
+apps:
+  admin:
+    port: 3011               # Pick unique ports for your spoke
+    description: Admin dashboard
+  client-app:
+    port: 3012
+    description: Client-facing application
+
+database:
+  schema_prefix: your_       # Prefix for spoke-specific tables
+  tables: []                 # List your spoke tables here

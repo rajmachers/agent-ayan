@@ -1,0 +1,69 @@
+# ═══════════════════════════════════════════════════════════════
+# EDUTECH SPOKE — Docker Compose (layers on top of compose.hub.yml)
+# Usage: docker compose -f docker/compose.hub.yml -f docker/compose.edutech.yml up --build
+# ═══════════════════════════════════════════════════════════════
+
+version: '3.8'
+
+services:
+  # Load edutech-specific DB schema into the shared hub-postgres
+  hub-postgres:
+    volumes:
+      - ../spokes/edutech/database/edutech-schema.sql:/docker-entrypoint-initdb.d/10-edutech-schema.sql
+
+  # ── EduTech Frontend Applications ──
+  edu-admin:
+    build: ../spokes/edutech/admin
+    container_name: edu-admin
+    ports:
+      - "3001:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+    depends_on:
+      - hub-gateway
+      - hub-websocket
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  edu-quiz:
+    build: ../spokes/edutech/quiz
+    container_name: edu-quiz
+    ports:
+      - "3002:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+    depends_on:
+      - hub-gateway
+      - hub-websocket
+      - hub-gatekeeper
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+  edu-simulator:
+    build: ../spokes/edutech/simulator
+    container_name: edu-simulator
+    ports:
+      - "3003:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+    depends_on:
+      - hub-gateway
+    networks:
+      - ayan-network
+    restart: unless-stopped
+
+networks:
+  ayan-network:
+    external: true
+    name: ayan-network

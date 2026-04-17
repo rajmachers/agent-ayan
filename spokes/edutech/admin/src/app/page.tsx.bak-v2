@@ -1,0 +1,782 @@
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
+import { motion, useScroll, useTransform, useSpring, AnimatePresence } from 'framer-motion';
+import {
+  Shield, Eye, Brain, Mic, Monitor, BarChart3,
+  CheckCircle2, AlertTriangle, Lock,
+  ChevronRight, Zap, Target, Users,
+  Building2, GraduationCap, Landmark, Award,
+  Cog, ArrowRight, Play, Pause, XCircle,
+  Fingerprint, Layers, RefreshCw,
+} from 'lucide-react';
+import {
+  ZoomReveal, StickyReveal, SlideIn, ScaleText,
+  HorizontalScroll, MaskReveal,
+} from './components/ScrollEffects';
+
+/* ─── constants ─── */
+const INDUSTRIES = [
+  { slug: 'enterprise', icon: Building2, label: 'Enterprise', color: 'cyan',
+    headline: 'High-Stakes Enterprise Hiring',
+    desc: 'Protect multi-million dollar recruitment pipelines with autonomous integrity verification across global candidate pools.',
+    usecases: ['Technical assessments', 'Leadership evaluations', 'Compliance certifications', 'Remote hiring at scale'],
+  },
+  { slug: 'government', icon: Landmark, label: 'Government & PSU', color: 'blue',
+    headline: 'Government Recruitment Integrity',
+    desc: 'Transparent, auditable examination systems for public sector recruitment — bias-free, tamper-proof, and legally defensible.',
+    usecases: ['Civil service exams', 'Defense recruitment', 'PSU entrance tests', 'Regulatory certifications'],
+  },
+  { slug: 'academics', icon: GraduationCap, label: 'Academia', color: 'purple',
+    headline: 'Preserving Merit in Digital Assessments',
+    desc: 'Fair examinations that protect academic integrity while respecting student dignity — no surveillance theatre.',
+    usecases: ['University entrance exams', 'Semester assessments', 'PhD qualifying exams', 'International certifications'],
+  },
+  { slug: 'training', icon: Award, label: 'Training & Certification', color: 'gold',
+    headline: 'Certification You Can Trust',
+    desc: 'Ensure every certificate issued represents genuine competence — verified by autonomous intelligence, not checkbox rules.',
+    usecases: ['Professional certifications', 'Compliance training', 'Skill assessments', 'Continuing education'],
+  },
+];
+
+const AGENTIC_PILLARS = [
+  { icon: Brain, title: 'Autonomous Decisions', desc: 'Pause, terminate, lock — without human delay. The agent acts when integrity is at risk.' },
+  { icon: Eye, title: 'Perception → Reasoning → Action', desc: 'Not event detection — behavioral understanding. Multi-signal fusion creates true situational awareness.' },
+  { icon: RefreshCw, title: 'Continuous Learning', desc: 'Every admin decision feeds back. Classification accuracy improves with every session.' },
+  { icon: Users, title: 'Cohort-Aware Context', desc: 'Adaptive thresholds based on exam population. What\'s normal for one cohort may be anomalous for another.' },
+  { icon: Layers, title: 'Multi-Signal Fusion', desc: 'Vision + audio + browser + screen + behavior. Correlated signals, not isolated rules.' },
+];
+
+const CAPABILITIES = [
+  { icon: Eye, label: 'Vision AI', sub: 'Face detection, gaze tracking, person count', category: 'PERCEIVE' },
+  { icon: Mic, label: 'Audio AI', sub: 'Voice analysis, ambient noise, speech detection', category: 'PERCEIVE' },
+  { icon: Monitor, label: 'Screen AI', sub: 'Tab monitoring, copy detection, app switching', category: 'PERCEIVE' },
+  { icon: Brain, label: 'Reasoning Engine', sub: 'LLM narratives, pattern correlation, intent analysis', category: 'REASON' },
+  { icon: BarChart3, label: 'Adaptive Scoring', sub: 'Cohort baselines, z-score deviation, credibility index', category: 'REASON' },
+  { icon: Fingerprint, label: 'Candidate Profiling', sub: 'Cross-session history, behavioral fingerprint, risk trends', category: 'REASON' },
+  { icon: Pause, label: 'Auto-Pause', sub: 'Suspend exam when credibility drops below threshold', category: 'ACT' },
+  { icon: Lock, label: 'Auto-Lock', sub: 'Lock candidate out when multiple faces persist', category: 'ACT' },
+  { icon: XCircle, label: 'Auto-Terminate', sub: 'End session for critical integrity violations', category: 'ACT' },
+  { icon: AlertTriangle, label: 'Proctor Alerts', sub: 'Real-time browser notifications to human proctors', category: 'ACT' },
+  { icon: RefreshCw, label: 'Feedback Loop', sub: 'Admin accept/reject → weight adjustment → improved accuracy', category: 'LEARN' },
+  { icon: Target, label: 'Accuracy Dashboard', sub: 'Classification metrics, false positive tracking, trend analysis', category: 'LEARN' },
+];
+
+const MARKET_GAP = [
+  { system: 'Rule-Based AI', problem: 'Rigid thresholds, high false positives', icon: Cog },
+  { system: 'Human Proctoring', problem: 'Expensive, doesn\'t scale, fatigue-prone', icon: Users },
+  { system: 'Video Recording', problem: 'Post-facto only, no real-time enforcement', icon: Play },
+  { system: 'Alert Dashboards', problem: 'Reactive, requires constant human attention', icon: AlertTriangle },
+];
+
+/* ═══════════════════════════════════════════════════════
+   MAIN PAGE — Apple-style immersive scroll experience
+   ═══════════════════════════════════════════════════════ */
+export default function Home() {
+  const [activeNav, setActiveNav] = useState('');
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setScrolled(window.scrollY > 80);
+      const sections = ['hero', 'problem', 'agentic', 'capabilities', 'industries', 'architecture', 'integration', 'vision'];
+      for (const id of [...sections].reverse()) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top < window.innerHeight * 0.5) {
+          setActiveNav(id);
+          break;
+        }
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  return (
+    <main className="relative">
+      {/* Background layers */}
+      <div className="fixed inset-0 bg-grid-pattern opacity-100 pointer-events-none" />
+      <div className="fixed inset-0 bg-gradient-radial from-cyan-400/[0.03] via-transparent to-transparent pointer-events-none" />
+
+      {/* ─── MORPHING NAV ─── */}
+      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${
+        scrolled
+          ? 'bg-navy-950/90 backdrop-blur-xl border-b border-white/[0.06] shadow-lg shadow-black/20'
+          : 'bg-transparent'
+      }`}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between h-16 px-6">
+          <motion.div
+            className="flex items-center gap-3"
+            animate={{ scale: scrolled ? 0.9 : 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/ayan-logo.png" alt="Ayan.ai" className="h-16 object-contain" />
+          </motion.div>
+
+          {/* Section indicator dots */}
+          <div className="hidden md:flex items-center gap-6">
+            {[
+              { id: 'problem', label: 'Problem' },
+              { id: 'agentic', label: 'Agentic' },
+              { id: 'capabilities', label: 'Capabilities' },
+              { id: 'industries', label: 'Industries' },
+              { id: 'architecture', label: 'Architecture' },
+            ].map((s) => (
+              <a
+                key={s.id}
+                href={`#${s.id}`}
+                className="group flex items-center gap-2"
+              >
+                <span className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                  activeNav === s.id ? 'bg-cyan-400 scale-125' : 'bg-white/20 group-hover:bg-white/40'
+                }`} />
+                <span className={`text-xs font-medium transition-all duration-300 ${
+                  activeNav === s.id ? 'text-cyan-400 opacity-100' : 'text-gray-500 opacity-0 group-hover:opacity-100'
+                }`}>
+                  {s.label}
+                </span>
+              </a>
+            ))}
+          </div>
+
+          <a
+            href="/admin"
+            className={`hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
+              scrolled
+                ? 'bg-cyan-400 text-navy-950 hover:bg-cyan-300'
+                : 'bg-cyan-400/10 text-cyan-400 border border-cyan-400/20 hover:bg-cyan-400/20'
+            }`}
+          >
+            Launch Console <ChevronRight size={14} />
+          </a>
+        </div>
+      </nav>
+
+      {/* ═══ SECTION 1: HERO ═══ */}
+      <section id="hero" className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
+        {/* Pulsing glow */}
+        <motion.div
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 40%, transparent 70%)' }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+        />
+
+        <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 40, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
+          >
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.25em] text-cyan-400/80 mb-6">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              Autonomous Agentic Proctoring Platform
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+
+            <h1 className="text-5xl md:text-7xl lg:text-[5.5rem] font-extrabold text-white leading-[1.05] mb-8 tracking-tight">
+              <span className="text-gradient">Ayan</span> doesn&apos;t
+              <br />
+              watch candidates.
+              <br />
+              <span className="text-gradient">It understands intent.</span>
+            </h1>
+
+            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+              The Autonomous Integrity Engine for High-Stakes Assessments.
+              <br className="hidden md:block" />
+              <span className="text-gray-300">We don&apos;t detect violations. We reason about behavior.</span>
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.8 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center"
+          >
+            <a href="#agentic" className="group inline-flex items-center gap-3 px-8 py-4 bg-cyan-400 text-navy-950 rounded-xl text-base font-semibold hover:bg-cyan-300 transition-all duration-300 hover:scale-105">
+              See the Intelligence
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </a>
+            <a href="#industries" className="inline-flex items-center gap-3 px-8 py-4 border border-white/10 text-white rounded-xl text-base font-medium hover:border-white/20 hover:bg-white/5 transition-all duration-300">
+              Industry Solutions
+            </a>
+          </motion.div>
+
+          {/* Scroll indicator */}
+          <motion.div
+            className="absolute bottom-8 left-1/2 -translate-x-1/2"
+            animate={{ y: [0, 12, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <div className="w-6 h-10 border-2 border-white/20 rounded-full flex justify-center pt-2">
+              <motion.div className="w-1.5 h-1.5 bg-cyan-400 rounded-full" />
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 2: BRAND NARRATIVE — Sticky sequential reveal ═══ */}
+      <StickyReveal height="180vh">
+        {(progress) => <BrandNarrative progress={progress} />}
+      </StickyReveal>
+
+      {/* ═══ SECTION 3: THE PROBLEM ═══ */}
+      <section id="problem" className="relative py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <ScaleText className="text-center mb-14" from={0.92}>
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-red-400/80 mb-4">
+              <span className="w-8 h-px bg-red-400/40" />
+              The Problem
+              <span className="w-8 h-px bg-red-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Detection is not enough.
+            </h2>
+            <p className="text-xl text-gray-400">Integrity requires intelligence.</p>
+          </ScaleText>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {MARKET_GAP.map((item, i) => (
+              <SlideIn key={item.system} direction={i % 2 === 0 ? 'left' : 'right'} delay={i * 0.1}>
+                <div className="bg-navy-900/60 backdrop-blur-sm border border-red-400/10 rounded-2xl p-8 hover:border-red-400/20 transition-all duration-500 group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-red-400/10 flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                      <item.icon className="w-6 h-6 text-red-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white mb-1">{item.system}</h3>
+                      <p className="text-gray-400">{item.problem}</p>
+                    </div>
+                  </div>
+                </div>
+              </SlideIn>
+            ))}
+          </div>
+
+          <div className="mt-14 text-center">
+            <MaskReveal
+              text="Cheating is evolving faster than detection systems. Human proctors don't scale. AI tools generate alerts but don't act. False positives damage fairness."
+              className="text-xl md:text-2xl text-gray-300 max-w-3xl mx-auto justify-center leading-relaxed font-light"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 4: AGENTIC INTELLIGENCE ═══ */}
+      <section id="agentic" className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/[0.02] to-transparent pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto px-6 relative z-10">
+          <ScaleText className="text-center mb-6">
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/80 mb-4">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              The Breakthrough
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-6xl font-bold text-white mb-4">
+              Not AI Proctoring.
+              <br />
+              <span className="text-gradient">Autonomous Agentic Intelligence.</span>
+            </h2>
+          </ScaleText>
+
+          <MaskReveal
+            text="We don't monitor exams. We govern them. Ayan acts as the Third Eye of Assessments — sees what humans miss, understands what rules cannot, acts when delay is risk."
+            className="text-xl text-gray-300 max-w-3xl mx-auto text-center leading-relaxed mb-14"
+          />
+
+          {/* Five pillars — horizontal scroll */}
+          <HorizontalScroll>
+            {AGENTIC_PILLARS.map((pillar) => (
+              <div
+                key={pillar.title}
+                className="flex-shrink-0 w-[380px] bg-navy-900/80 backdrop-blur-sm border border-white/[0.06] rounded-2xl p-8 hover:border-cyan-400/20 transition-all duration-500 group"
+              >
+                <div className="w-14 h-14 rounded-xl bg-cyan-400/10 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-cyan-400/20 transition-all duration-300">
+                  <pillar.icon className="w-7 h-7 text-cyan-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-3">{pillar.title}</h3>
+                <p className="text-gray-400 leading-relaxed">{pillar.desc}</p>
+              </div>
+            ))}
+          </HorizontalScroll>
+
+          {/* Maturity model */}
+          <div className="mt-14">
+            <h3 className="text-center text-2xl font-bold text-white mb-12">The Evolution of Proctoring</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-0 relative">
+              <div className="hidden md:block absolute top-1/2 left-0 right-0 h-px bg-gradient-to-r from-gray-600 via-cyan-400/40 to-cyan-400" />
+
+              {[
+                { tier: 'Tier 1', label: 'Reactive', sub: 'Manual Review', desc: 'Flag events. Human reviews recordings post-exam.', active: false },
+                { tier: 'Tier 2', label: 'Automated', sub: 'Rule-Based', desc: 'Static rules trigger alerts. No contextual reasoning.', active: false },
+                { tier: 'Tier 3', label: 'Agentic', sub: 'Ayan.ai', desc: 'Perceive → Reason → Decide → Act → Learn. Closed-loop autonomy.', active: true },
+              ].map((tier, i) => (
+                <SlideIn key={tier.tier} direction="up" delay={i * 0.15}>
+                  <div className={`relative z-10 p-8 rounded-2xl text-center transition-all duration-500 ${
+                    tier.active
+                      ? 'bg-navy-900/80 border-2 border-cyan-400/30 glow-cyan scale-105'
+                      : 'bg-navy-900/40 border border-white/[0.06]'
+                  }`}>
+                    <div className={`w-4 h-4 rounded-full mx-auto mb-4 ${tier.active ? 'bg-cyan-400 shadow-lg shadow-cyan-400/50' : 'bg-gray-600'}`} />
+                    <div className={`text-xs font-mono uppercase tracking-wider mb-2 ${tier.active ? 'text-cyan-400' : 'text-gray-500'}`}>{tier.tier}</div>
+                    <h4 className={`text-xl font-bold mb-1 ${tier.active ? 'text-white' : 'text-gray-400'}`}>{tier.label}</h4>
+                    <div className={`text-sm mb-3 ${tier.active ? 'text-cyan-400/80' : 'text-gray-500'}`}>{tier.sub}</div>
+                    <p className={`text-sm ${tier.active ? 'text-gray-300' : 'text-gray-500'}`}>{tier.desc}</p>
+                  </div>
+                </SlideIn>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 5: CAPABILITIES ═══ */}
+      <section id="capabilities" className="relative py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <ScaleText className="text-center mb-14">
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/80 mb-4">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              Live Intelligence
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white">
+              The Autonomous Loop
+            </h2>
+          </ScaleText>
+
+          {(['PERCEIVE', 'REASON', 'ACT', 'LEARN'] as const).map((phase, pi) => {
+            const phaseItems = CAPABILITIES.filter(c => c.category === phase);
+            const colorClasses: Record<string, { bg: string; text: string; border: string; line: string }> = {
+              PERCEIVE: { bg: 'bg-blue-400/10', text: 'text-blue-400', border: 'border-blue-400/20', line: 'bg-blue-400/10' },
+              REASON: { bg: 'bg-purple-400/10', text: 'text-purple-400', border: 'border-purple-400/20', line: 'bg-purple-400/10' },
+              ACT: { bg: 'bg-red-400/10', text: 'text-red-400', border: 'border-red-400/20', line: 'bg-red-400/10' },
+              LEARN: { bg: 'bg-green-400/10', text: 'text-green-400', border: 'border-green-400/20', line: 'bg-green-400/10' },
+            };
+            const c = colorClasses[phase];
+            return (
+              <div key={phase} className="mb-16">
+                <SlideIn direction="left" delay={pi * 0.05}>
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className={`px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider ${c.bg} ${c.text} ${c.border} border`}>
+                      {phase}
+                    </span>
+                    <div className={`flex-grow h-px ${c.line}`} />
+                  </div>
+                </SlideIn>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {phaseItems.map((cap, i) => (
+                    <SlideIn key={cap.label} direction="up" delay={i * 0.08}>
+                      <div className="bg-navy-900/60 backdrop-blur-sm border border-white/[0.06] rounded-xl p-6 hover:border-white/10 transition-all duration-300 group">
+                        <div className="flex items-center gap-3 mb-3">
+                          <cap.icon className={`w-5 h-5 ${c.text} group-hover:scale-110 transition-transform`} />
+                          <h4 className="text-white font-semibold">{cap.label}</h4>
+                        </div>
+                        <p className="text-sm text-gray-400">{cap.sub}</p>
+                      </div>
+                    </SlideIn>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ═══ SECTION 6: INDUSTRIES ═══ */}
+      <section id="industries" className="relative py-20 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-400/[0.015] to-transparent pointer-events-none" />
+        <div className="max-w-6xl mx-auto px-6 relative z-10">
+          <ScaleText className="text-center mb-14">
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/80 mb-4">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              Industry Solutions
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Built for the institutions that
+              <br />
+              <span className="text-gradient">cannot afford to compromise.</span>
+            </h2>
+          </ScaleText>
+
+          <IndustryShowcase />
+        </div>
+      </section>
+
+      {/* ═══ SECTION 7: ARCHITECTURE ═══ */}
+      <section id="architecture" className="relative py-20">
+        <div className="max-w-6xl mx-auto px-6">
+          <ScaleText className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/80 mb-4">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              Under the Hood
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-2">
+              Closed-Loop Autonomous System
+            </h2>
+            <p className="text-lg text-gray-400">No human-in-the-loop required for critical enforcement</p>
+          </ScaleText>
+
+          <ZoomReveal>
+            <div className="bg-navy-900/80 backdrop-blur-sm border border-white/[0.06] rounded-3xl p-8 md:p-12">
+              <ArchitectureDiagram />
+            </div>
+          </ZoomReveal>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 8: INTEGRATION ═══ */}
+      <section id="integration" className="relative py-20">
+        <div className="max-w-5xl mx-auto px-6">
+          <ScaleText className="text-center mb-16">
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-cyan-400/80 mb-4">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              Integration
+              <span className="w-8 h-px bg-cyan-400/40" />
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mb-4">
+              Live in minutes.{' '}
+              <span className="text-gradient">Not months.</span>
+            </h2>
+          </ScaleText>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { tier: 'Tier 3 — Embed', time: '5 min', code: '<iframe src="https://ayan.ai/exam?id=..." />', desc: 'Zero-code iframe. Drop into any LMS.' },
+              { tier: 'Tier 1 — Script', time: '30 min', code: '<script src="https://ayan.ai/sdk.js" />\nAyan.init({ examId, apiKey })', desc: 'Single script tag. Full monitoring.' },
+              { tier: 'Tier 2 — SDK', time: '1-2 hrs', code: 'import { ProctorSDK } from "@ayan/sdk"\nconst proctor = new ProctorSDK(config)', desc: 'Full NPM package. Complete control.' },
+            ].map((tier, i) => (
+              <SlideIn key={tier.tier} direction="up" delay={i * 0.12}>
+                <div className="bg-navy-900/60 backdrop-blur-sm border border-white/[0.06] rounded-2xl p-8 hover:border-cyan-400/20 transition-all duration-500 group h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-mono text-cyan-400/80 uppercase tracking-wider">{tier.tier}</span>
+                    <span className="px-2 py-1 rounded-lg bg-cyan-400/10 text-cyan-400 text-xs font-medium">{tier.time}</span>
+                  </div>
+                  <p className="text-gray-400 text-sm mb-4 flex-grow">{tier.desc}</p>
+                  <pre className="bg-navy-950 rounded-xl p-4 text-xs font-mono text-cyan-300/80 overflow-x-auto border border-white/[0.04]">
+                    {tier.code}
+                  </pre>
+                </div>
+              </SlideIn>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 9: FAIRNESS & TRUST ═══ */}
+      <section className="relative py-20">
+        <div className="max-w-5xl mx-auto px-6">
+          <ZoomReveal>
+            <div className="bg-gradient-to-br from-navy-900/80 to-navy-900/40 backdrop-blur-sm border border-cyan-400/10 rounded-3xl p-12 md:p-16 text-center glow-cyan">
+              <Shield className="w-16 h-16 text-cyan-400 mx-auto mb-8" />
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+                Integrity is Infrastructure
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mt-10">
+                {[
+                  { label: 'Bias Reduction', desc: 'Cohort normalization eliminates population-level bias' },
+                  { label: 'Explainable AI', desc: 'Every decision comes with LLM-generated reasoning' },
+                  { label: 'Feedback Loop', desc: 'Admin corrections continuously improve accuracy' },
+                  { label: 'Transparent Scoring', desc: 'Per-violation weights, adaptive thresholds, full audit trail' },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <h4 className="text-white font-semibold mb-2">{item.label}</h4>
+                    <p className="text-gray-400 text-sm">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ZoomReveal>
+        </div>
+      </section>
+
+      {/* ═══ SECTION 10: VISION ═══ */}
+      <section id="vision" className="relative py-20">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1 }}
+            viewport={{ once: true }}
+          >
+            <span className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-[0.2em] text-gold-400/80 mb-6">
+              <span className="w-8 h-px bg-gold-400/40" />
+              Vision
+              <span className="w-8 h-px bg-gold-400/40" />
+            </span>
+
+            <h2 className="text-4xl md:text-6xl font-bold text-white mb-8 leading-tight">
+              From Proctoring
+              <br />
+              to <span className="text-gradient">Autonomous Governance</span>
+            </h2>
+
+            <MaskReveal
+              text="Ayan doesn't just watch candidates — it understands intent and enforces integrity in real time. Protects merit. Prevents fraud. Builds institutional trust."
+              className="text-xl text-gray-300 max-w-2xl mx-auto justify-center leading-relaxed mb-12"
+            />
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <a href="/admin" className="group inline-flex items-center gap-3 px-8 py-4 bg-cyan-400 text-navy-950 rounded-xl text-base font-semibold hover:bg-cyan-300 transition-all duration-300 hover:scale-105">
+                Launch Admin Console
+                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </a>
+              <a href="#hero" className="inline-flex items-center gap-3 px-8 py-4 border border-white/10 text-white rounded-xl text-base font-medium hover:border-white/20 hover:bg-white/5 transition-all duration-300">
+                Back to Top
+              </a>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ═══ FOOTER ═══ */}
+      <footer className="border-t border-white/[0.06] py-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/ayan-icon.png" alt="Ayan" className="h-8 w-8" />
+              <span className="text-white font-semibold">Ayan.ai</span>
+              <span className="text-gray-600">|</span>
+              <span className="text-gray-500 text-sm">Autonomous Integrity at Scale</span>
+            </div>
+            <div className="flex items-center gap-6 text-xs text-gray-500">
+              <span>A product by</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="https://machers.tech/images/logo1.png" alt="Tech Machers" className="h-6 opacity-50 hover:opacity-80 transition" />
+              <span>&copy; 2026 Tech Machers</span>
+            </div>
+          </div>
+          <div className="mt-8 flex flex-wrap gap-6 justify-center text-xs text-gray-600">
+            <span className="italic">&quot;Trust, Automated.&quot;</span>
+            <span>&middot;</span>
+            <span className="italic">&quot;AI That Enforces Fairness&quot;</span>
+            <span>&middot;</span>
+            <span className="italic">&quot;Preserving Merit in Digital Assessments&quot;</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   SUB-COMPONENTS
+   ═══════════════════════════════════════════════════════ */
+
+function BrandNarrative({ progress }: { progress: any }) {
+  // Three clean phases — no overlap: 0-0.33, 0.33-0.66, 0.66-1.0
+  const opacity1 = useTransform(progress, [0, 0.05, 0.25, 0.33], [0, 1, 1, 0]);
+  const y1 = useTransform(progress, [0, 0.05, 0.25, 0.33], [30, 0, 0, -30]);
+  const opacity2 = useTransform(progress, [0.33, 0.38, 0.58, 0.66], [0, 1, 1, 0]);
+  const y2 = useTransform(progress, [0.33, 0.38, 0.58, 0.66], [30, 0, 0, -30]);
+  const opacity3 = useTransform(progress, [0.66, 0.71, 0.92, 1], [0, 1, 1, 0.8]);
+  const y3 = useTransform(progress, [0.66, 0.71, 0.92, 1], [30, 0, 0, 0]);
+
+  return (
+    <div className="max-w-4xl mx-auto px-6 text-center relative w-full h-full">
+      <motion.div style={{ opacity: opacity1, y: y1 }} className="absolute inset-0 flex items-center justify-center px-6">
+        <div>
+          <p className="text-sm font-mono text-cyan-400/60 uppercase tracking-widest mb-6">The Origin</p>
+          <h2 className="text-4xl md:text-6xl font-bold text-white leading-tight">
+            In ancient philosophy, <span className="text-gradient">Ayan</span> represents
+            <br />the origin of order.
+          </h2>
+          <p className="text-xl text-gray-400 mt-6">The force that creates structure from chaos.</p>
+        </div>
+      </motion.div>
+
+      <motion.div style={{ opacity: opacity2, y: y2 }} className="absolute inset-0 flex items-center justify-center px-6">
+        <div>
+          <p className="text-sm font-mono text-cyan-400/60 uppercase tracking-widest mb-6">The Mission</p>
+          <h2 className="text-4xl md:text-6xl font-bold text-white leading-tight">
+            In modern systems,
+            <br /><span className="text-gradient">integrity</span> is that force.
+          </h2>
+          <p className="text-xl text-gray-400 mt-6">Fairness, discipline, and trust — without bias, without fatigue, without compromise.</p>
+        </div>
+      </motion.div>
+
+      <motion.div style={{ opacity: opacity3, y: y3 }} className="absolute inset-0 flex items-center justify-center px-6">
+        <div>
+          <p className="text-sm font-mono text-gold-400/60 uppercase tracking-widest mb-6">The Third Eye</p>
+          <h2 className="text-4xl md:text-6xl font-bold text-white leading-tight">
+            <span className="text-gradient">Ayan</span> is the Third Eye
+            <br />of Assessments.
+          </h2>
+          <div className="flex flex-col md:flex-row gap-8 mt-8 justify-center text-gray-300">
+            <span>Sees what humans miss</span>
+            <span>Understands what rules cannot</span>
+            <span>Acts when delay is risk</span>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function IndustryShowcase() {
+  const [active, setActive] = useState(0);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="space-y-4">
+        {INDUSTRIES.map((ind, i) => {
+          const isActive = active === i;
+          return (
+            <motion.button
+              key={ind.slug}
+              onClick={() => setActive(i)}
+              className={`w-full text-left p-6 rounded-2xl border transition-all duration-500 ${
+                isActive
+                  ? 'bg-navy-900/80 border-cyan-400/30 shadow-lg'
+                  : 'bg-navy-900/30 border-white/[0.04] hover:border-white/10'
+              }`}
+              layout
+            >
+              <div className="flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                  isActive ? 'bg-cyan-400/20' : 'bg-white/5'
+                }`}>
+                  <ind.icon className={`w-6 h-6 ${isActive ? 'text-cyan-400' : 'text-gray-500'}`} />
+                </div>
+                <div className="flex-grow">
+                  <h3 className={`font-semibold ${isActive ? 'text-white' : 'text-gray-400'}`}>{ind.label}</h3>
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.p
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="text-sm text-gray-400 mt-1"
+                      >
+                        {ind.desc}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+                <ChevronRight className={`ml-auto w-5 h-5 flex-shrink-0 transition-transform duration-300 ${
+                  isActive ? 'text-cyan-400 rotate-90' : 'text-gray-600'
+                }`} />
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={active}
+          initial={{ opacity: 0, x: 40, scale: 0.95 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: -40, scale: 0.95 }}
+          transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
+          className="bg-navy-900/60 backdrop-blur-sm border border-white/[0.06] rounded-2xl p-8 flex flex-col justify-center"
+        >
+          <h3 className="text-2xl font-bold text-white mb-4">{INDUSTRIES[active].headline}</h3>
+          <p className="text-gray-400 mb-8">{INDUSTRIES[active].desc}</p>
+          <div className="space-y-3">
+            {INDUSTRIES[active].usecases.map((uc) => (
+              <div key={uc} className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-cyan-400 flex-shrink-0" />
+                <span className="text-gray-300">{uc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 pt-6 border-t border-white/[0.06]">
+            <p className="text-sm text-gray-500 italic">
+              &quot;{INDUSTRIES[active].label === 'Enterprise' ? 'Trust, Automated.' :
+                INDUSTRIES[active].label === 'Government & PSU' ? 'AI That Enforces Fairness.' :
+                INDUSTRIES[active].label === 'Academia' ? 'Preserving Merit in Digital Assessments.' :
+                'Certification You Can Trust.'}&quot;
+            </p>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function ArchitectureDiagram() {
+  const layers = [
+    {
+      label: 'Perception Layer',
+      colorClasses: { bg: 'bg-blue-400/10', text: 'text-blue-400', border: 'border-blue-400/20', line: 'bg-blue-400/10' },
+      items: [
+        { name: 'Vision AI', sub: 'MediaPipe + YOLOv8' },
+        { name: 'Audio AI', sub: 'Whisper + pyannote' },
+        { name: 'Screen Monitor', sub: 'Tab + Copy + App' },
+        { name: 'Browser SDK', sub: 'Real-time telemetry' },
+      ],
+    },
+    {
+      label: 'Reasoning Layer',
+      colorClasses: { bg: 'bg-purple-400/10', text: 'text-purple-400', border: 'border-purple-400/20', line: 'bg-purple-400/10' },
+      items: [
+        { name: 'Agent Reasoning', sub: 'LLM Narratives' },
+        { name: 'Violation Classifier', sub: 'Multi-signal fusion' },
+        { name: 'Pattern Detector', sub: 'Cross-session analysis' },
+        { name: 'Adaptive Scoring', sub: 'Cohort baselines' },
+      ],
+    },
+    {
+      label: 'Action Layer',
+      colorClasses: { bg: 'bg-red-400/10', text: 'text-red-400', border: 'border-red-400/20', line: 'bg-red-400/10' },
+      items: [
+        { name: 'Decision Engine', sub: 'Autonomous / Copilot' },
+        { name: 'Session Control', sub: 'Pause + Lock + Terminate' },
+        { name: 'Proctor Alerts', sub: 'Real-time notifications' },
+        { name: 'Candidate SDK', sub: 'Overlay enforcement' },
+      ],
+    },
+    {
+      label: 'Learning Layer',
+      colorClasses: { bg: 'bg-green-400/10', text: 'text-green-400', border: 'border-green-400/20', line: 'bg-green-400/10' },
+      items: [
+        { name: 'Feedback Loop', sub: 'Accept / Reject' },
+        { name: 'Weight Tuning', sub: 'Adaptive thresholds' },
+        { name: 'Accuracy Metrics', sub: 'FP/FN tracking' },
+        { name: 'Candidate Profile', sub: 'Behavioral memory' },
+      ],
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {layers.map((layer, li) => (
+        <SlideIn key={layer.label} direction="left" delay={li * 0.1}>
+          <div>
+            <div className="flex items-center gap-3 mb-3">
+              <span className={`px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider ${layer.colorClasses.bg} ${layer.colorClasses.text} ${layer.colorClasses.border} border`}>
+                {layer.label}
+              </span>
+              {li < layers.length - 1 && (
+                <div className={`flex-grow h-px ${layer.colorClasses.line}`} />
+              )}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {layer.items.map((item) => (
+                <div key={item.name} className="bg-navy-950/60 rounded-xl p-4 border border-white/[0.04] hover:border-white/10 transition-colors">
+                  <div className="text-white text-sm font-medium">{item.name}</div>
+                  <div className="text-gray-500 text-xs mt-1">{item.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </SlideIn>
+      ))}
+
+      <div className="text-center mt-8">
+        <div className="inline-flex items-center gap-3 text-cyan-400/60 text-sm font-mono">
+          <RefreshCw className="w-4 h-4 animate-spin" style={{ animationDuration: '4s' }} />
+          Closed-loop — Learning feeds back into Perception
+        </div>
+      </div>
+    </div>
+  );
+}

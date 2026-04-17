@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDK Test - Working Version</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; margin: 20px; }
+        .test-button { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; margin: 10px; cursor: pointer; }
+        .test-button:hover { background: #2563eb; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 6px; }
+        .success { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+        .error { background: #fee2e2; color: #7f1d1d; border: 1px solid #fca5a5; }
+        .info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        #console { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 8px; font-family: 'Courier New', monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>🧪 ProctorSDK Integration Test</h1>
+    
+    <div class="status info">
+        <strong>Status:</strong> <span id="status">Ready to test</span>
+    </div>
+
+    <div>
+        <button class="test-button" onclick="testSDKLoad()">
+            🚀 Load SDK
+        </button>
+        <button class="test-button" onclick="testInitialize()">
+            ⚙️ Initialize Proctoring
+        </button>
+        <button class="test-button" onclick="testSimulation()">
+            🎭 Start Simulation
+        </button>
+        <button class="test-button" onclick="clearLogs()">
+            🧹 Clear Logs
+        </button>
+    </div>
+
+    <h3>Console Output:</h3>
+    <div id="console"></div>
+
+    <h3>Widget Check:</h3>
+    <div id="widget-info">Widget status will appear here...</div>
+
+    <script src="/proctor-sdk-p6.js"></script>
+    <script>
+        const statusEl = document.getElementById('status');
+        const consoleEl = document.getElementById('console');
+        const widgetInfo = document.getElementById('widget-info');
+        
+        let proctorInstance = null;
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : 'ℹ️';
+            consoleEl.innerHTML += `<div>[${timestamp}] ${emoji} ${message}</div>`;
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+            console.log(`[TEST] ${message}`);
+        }
+
+        function updateStatus(message, type = 'info') {
+            statusEl.textContent = message;
+            const parent = statusEl.parentElement;
+            parent.className = `status ${type}`;
+        }
+
+        function checkWidget() {
+            const widget = document.getElementById('proctoring-widget-container');
+            if (widget) {
+                widgetInfo.innerHTML = '✅ Proctoring widget is visible on page';
+                widgetInfo.style.color = 'green';
+                updateStatus('Widget active and visible', 'success');
+            } else {
+                widgetInfo.innerHTML = '❌ No proctoring widget found';
+                widgetInfo.style.color = 'red';
+            }
+        }
+
+        function clearLogs() {
+            consoleEl.innerHTML = '';
+        }
+
+        function testSDKLoad() {
+            log('Testing SDK availability...');
+            
+            if (window.ProctorSDK) {
+                log('✅ ProctorSDK is available on window object', 'success');
+                log(`SDK methods: ${Object.keys(window.ProctorSDK).join(', ')}`);
+                updateStatus('SDK loaded successfully', 'success');
+            } else {
+                log('❌ ProctorSDK not found on window', 'error');
+                updateStatus('SDK not loaded', 'error');
+            }
+        }
+
+        function testInitialize() {
+            if (!window.ProctorSDK) {
+                log('❌ SDK not loaded. Please load SDK first.', 'error');
+                updateStatus('SDK not available', 'error');
+                return;
+            }
+
+            log('Initializing ProctorSDK with test configuration...');
+            
+            try {
+                proctorInstance = window.ProctorSDK.init({
+                    candidateId: 'test-candidate-web',
+                    examId: 'web-integration-test',
+                    organizationId: 'test-organization',
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: false,
+                    autoStart: true
+                });
+
+                // Set up event listeners
+                proctorInstance.on('violation', (violation) => {
+                    log(`🚨 Violation: ${violation.description} (${violation.type})`, 'warning');
+                });
+
+                proctorInstance.on('session:started', (data) => {
+                    log('🎉 Session started successfully!', 'success');
+                    updateStatus('Proctoring session active', 'success');
+                    setTimeout(checkWidget, 500);
+                });
+
+                log('📝 SDK initialization requested', 'success');
+                updateStatus('Initializing proctoring...', 'info');
+
+            } catch (error) {
+                log(`❌ Initialization failed: ${error.message}`, 'error');
+                updateStatus('Initialization failed', 'error');
+            }
+        }
+
+        function testSimulation() {
+            if (!proctorInstance) {
+                log('❌ No active proctor instance. Please initialize first.', 'error');
+                return;
+            }
+
+            log('Starting violation simulation...');
+            proctorInstance.config.enableSimulation = true;
+            proctorInstance.startViolationSimulation();
+            updateStatus('Running violation simulation', 'info');
+        }
+
+        // Auto-test when page loads
+        window.addEventListener('load', () => {
+            log('🚀 Test page loaded');
+            setTimeout(() => {
+                testSDKLoad();
+            }, 500);
+        });
+
+        // Check for widget periodically
+        setInterval(checkWidget, 2000);
+
+        // Capture any global errors
+        window.addEventListener('error', (e) => {
+            log(`❌ Global error: ${e.message} at ${e.filename}:${e.lineno}`, 'error');
+        });
+    </script>
+</body>
+</html>

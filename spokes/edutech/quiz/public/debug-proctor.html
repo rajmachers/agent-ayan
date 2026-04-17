@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug ProctorSDK</title>
+</head>
+<body>
+    <h1>ProctorSDK Debug Console</h1>
+    <div id="console-output" style="background: #f0f0f0; padding: 10px; margin: 10px 0; height: 300px; overflow-y: scroll; font-family: monospace; font-size: 12px;"></div>
+    
+    <button onclick="testSDKLoad()">1. Test SDK Load</button>
+    <button onclick="testWebSocket()">2. Test WebSocket</button>
+    <button onclick="initSDK()">3. Initialize SDK</button>
+    <button onclick="clearConsole()">Clear</button>
+
+    <div id="widget-check" style="margin-top: 20px;">
+        <h3>Widget Status:</h3>
+        <div id="widget-status">Checking...</div>
+    </div>
+
+    <script>
+        const output = document.getElementById('console-output');
+        const widgetStatus = document.getElementById('widget-status');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            output.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
+            console.log(`[DEBUG] ${message}`);
+        }
+
+        function clearConsole() {
+            output.innerHTML = '';
+        }
+
+        function checkWidget() {
+            const widget = document.getElementById('proctoring-widget-container');
+            if (widget) {
+                widgetStatus.innerHTML = '✅ Widget found in DOM';
+                widgetStatus.style.color = 'green';
+            } else {
+                widgetStatus.innerHTML = '❌ Widget not found';
+                widgetStatus.style.color = 'red';
+            }
+        }
+
+        function testSDKLoad() {
+            log('Testing SDK script loading...', 'info');
+            
+            const script = document.createElement('script');
+            script.src = '/packages/proctoring-sdk/dist/proctor-sdk.umd.js';
+            
+            script.onload = () => {
+                log('✅ SDK script loaded successfully', 'success');
+                if (window.ProctorSDK) {
+                    log('✅ ProctorSDK object is available', 'success');
+                    log(`ProctorSDK methods: ${Object.keys(window.ProctorSDK).join(', ')}`, 'info');
+                } else {
+                    log('❌ ProctorSDK object not found on window', 'error');
+                }
+            };
+            
+            script.onerror = (error) => {
+                log('❌ Failed to load SDK script', 'error');
+                log(`Error: ${error}`, 'error');
+            };
+            
+            // Check if already loaded
+            if (window.ProctorSDK) {
+                log('⚠️ SDK already loaded', 'info');
+                return;
+            }
+            
+            document.head.appendChild(script);
+        }
+
+        function testWebSocket() {
+            log('Testing direct WebSocket connection...', 'info');
+            
+            try {
+                const ws = new WebSocket('ws://localhost:8080?type=candidate');
+                
+                ws.onopen = () => {
+                    log('✅ WebSocket connected successfully', 'success');
+                    
+                    const testMessage = {
+                        type: 'session:start',
+                        data: {
+                            candidateId: 'debug-test-candidate',
+                            examId: 'debug-test',
+                            organizationId: 'debug-org',
+                            totalQuestions: 1,
+                            metadata: {
+                                userAgent: navigator.userAgent,
+                                timestamp: new Date().toISOString()
+                            }
+                        }
+                    };
+                    
+                    ws.send(JSON.stringify(testMessage));
+                    log('📤 Sent test message to session manager', 'info');
+                };
+                
+                ws.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    log(`📨 Received: ${JSON.stringify(message)}`, 'success');
+                };
+                
+                ws.onerror = (error) => {
+                    log(`❌ WebSocket error: ${error}`, 'error');
+                };
+                
+                ws.onclose = () => {
+                    log('🔌 WebSocket connection closed', 'info');
+                };
+                
+                // Auto close after 5 seconds
+                setTimeout(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.close();
+                        log('⏰ Closed WebSocket after timeout', 'info');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                log(`❌ Failed to create WebSocket: ${error}`, 'error');
+            }
+        }
+
+        function initSDK() {
+            if (!window.ProctorSDK) {
+                log('❌ ProctorSDK not loaded yet. Run Test SDK Load first.', 'error');
+                return;
+            }
+            
+            log('Initializing ProctorSDK...', 'info');
+            
+            try {
+                const proctor = window.ProctorSDK.init({
+                    candidateId: 'debug-candidate-123',
+                    examId: 'debug-exam',
+                    organizationId: 'debug-org',
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: true,
+                    autoStart: true
+                });
+
+                proctor.on('violation', (violation) => {
+                    log(`🚨 Violation detected: ${violation.description}`, 'error');
+                });
+
+                proctor.on('session:started', () => {
+                    log('✅ Proctoring session started successfully!', 'success');
+                    setTimeout(checkWidget, 1000);
+                });
+
+                log('📝 SDK initialization requested', 'info');
+                
+            } catch (error) {
+                log(`❌ SDK initialization failed: ${error}`, 'error');
+            }
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            log('🚀 Debug page loaded', 'info');
+            log(`Current URL: ${window.location.href}`, 'info');
+            log(`User Agent: ${navigator.userAgent}`, 'info');
+            
+            // Check for existing widget
+            setTimeout(checkWidget, 500);
+            
+            // Auto-load SDK after 1 second
+            setTimeout(() => {
+                log('Auto-loading SDK...', 'info');
+                testSDKLoad();
+            }, 1000);
+        });
+
+        // Check for widget periodically
+        setInterval(checkWidget, 2000);
+
+        // Capture all console errors
+        window.addEventListener('error', (e) => {
+            log(`❌ Global error: ${e.message} at ${e.filename}:${e.lineno}`, 'error');
+        });
+    </script>
+</body>
+</html>

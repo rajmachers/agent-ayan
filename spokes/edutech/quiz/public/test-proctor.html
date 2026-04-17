@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProctorSDK Test</title>
+</head>
+<body>
+    <h1>ProctorSDK Integration Test</h1>
+    <button id="init-btn">Initialize Proctoring</button>
+    <button id="simulate-btn" disabled>Start Violation Simulation</button>
+    <div id="output"></div>
+
+    <script src="/packages/proctoring-sdk/dist/proctor-sdk.umd.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        const initBtn = document.getElementById('init-btn');
+        const simulateBtn = document.getElementById('simulate-btn');
+
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            console.log(message);
+        }
+
+        initBtn.addEventListener('click', () => {
+            log('Attempting to initialize ProctorSDK...');
+            
+            if (window.ProctorSDK) {
+                log('ProctorSDK is available');
+                const proctor = window.ProctorSDK.init({
+                    candidateId: 'test-candidate-123',
+                    examId: 'test-exam',
+                    organizationId: 'test-org',
+                    sessionManager: 'ws://localhost:8080',
+                    enableSimulation: false,
+                    autoStart: true
+                });
+
+                proctor.on('violation', (violation) => {
+                    log(`Violation: ${violation.description} (${violation.type})`);
+                });
+
+                proctor.on('session:started', () => {
+                    log('✅ Proctoring session started successfully!');
+                    simulateBtn.disabled = false;
+                });
+
+                log('ProctorSDK initialized');
+                initBtn.disabled = true;
+            } else {
+                log('❌ ProctorSDK not found');
+            }
+        });
+
+        simulateBtn.addEventListener('click', () => {
+            const instance = window.ProctorSDKInstance;
+            if (instance) {
+                log('Starting violation simulation...');
+                instance.config.enableSimulation = true;
+                instance.startViolationSimulation();
+            }
+        });
+
+        // Auto-initialize on load
+        window.addEventListener('load', () => {
+            log('Page loaded, ProctorSDK available: ' + !!window.ProctorSDK);
+            if (window.ProctorSDK) {
+                setTimeout(() => initBtn.click(), 1000);
+            }
+        });
+    </script>
+</body>
+</html>
