@@ -2,7 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsndfile1 libsox-dev sox wget git curl \
     && rm -rf /var/lib/apt/lists/*
 

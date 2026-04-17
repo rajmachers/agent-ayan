@@ -39,10 +39,10 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
       let examId = 'financial-literacy-2026';
       
       if (candidateId.includes('@eng.college.edu')) {
-        organizationId = '443be9e2-7918-4c1f-8d5b-ad2a3a2abd95'; // Engineering College
+        organizationId = '123e4567-e89b-12d3-a456-426614174000'; // Engineering College
         examId = 'engineering-midterm-2024';
       } else if (candidateId.includes('@business.school.edu')) {
-        organizationId = '332be9e2-7918-4c1f-8d5b-ad2a3a2abd96'; // Business School
+        organizationId = '987fcdeb-51a2-43d7-8f9e-123456789abc'; // Business School
         examId = 'business-final-2024';
       } else if (candidateId.includes('@cs.university.edu')) {
         organizationId = '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94'; // CS University
@@ -173,66 +173,13 @@ export default function LoginForm({ onLogin }: LoginFormProps) {
             </button>
           </form>
 
-          {/* Quick Test Accounts */}
           <div className="mt-6 space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Test Accounts</h3>
-              <div className="grid grid-cols-1 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCandidateId('student001@cs.university.edu');
-                    setAccessCode('EXAM2024');
-                  }}
-                  className="text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-colors"
-                >
-                  <div className="font-medium text-sm text-gray-900">Clean Session</div>
-                  <div className="text-xs text-gray-500">student001@cs.university.edu • No violations expected</div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCandidateId('student002@cs.university.edu');
-                    setAccessCode('EXAM2024');
-                  }}
-                  className="text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-yellow-300 hover:bg-yellow-50 transition-colors"
-                >
-                  <div className="font-medium text-sm text-gray-900">Minor Violations</div>
-                  <div className="text-xs text-gray-500">student002@cs.university.edu • Background noise, brief focus loss</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCandidateId('student003@cs.university.edu');
-                    setAccessCode('EXAM2024');
-                  }}
-                  className="text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-red-300 hover:bg-red-50 transition-colors"
-                >
-                  <div className="font-medium text-sm text-gray-900">High-Risk Session</div>
-                  <div className="text-xs text-gray-500">student003@cs.university.edu • Multiple violations, camera issues</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCandidateId('student101@eng.college.edu');
-                    setAccessCode('MIDTERM2024');
-                  }}
-                  className="text-left p-3 bg-white border border-gray-200 rounded-lg hover:border-orange-300 hover:bg-orange-50 transition-colors"
-                >
-                  <div className="font-medium text-sm text-gray-900">Engineering College</div>
-                  <div className="text-xs text-gray-500">student101@eng.college.edu • Multiple people detected</div>
-                </button>
-              </div>
-            </div>
-
             {/* Manual Entry Instructions */}
             <div className="p-4 bg-blue-50 rounded-lg">
-              <h3 className="text-sm font-semibold text-blue-700 mb-2">Manual Entry</h3>
+              <h3 className="text-sm font-semibold text-blue-700 mb-2">Login Instructions</h3>
               <ul className="text-xs text-blue-600 space-y-1">
-                <li>• Use any email as Candidate ID</li>
+                <li>• Use simulated candidate credentials generated from the Simulator app</li>
+                <li>• Candidate ID should be a valid tenant email (for example: user@cs.university.edu)</li>
                 <li>• Access Codes: EXAM2024, MIDTERM2024, FINAL2024</li>
                 <li>• AI monitoring: Vision, Audio, Behavior tracking</li>
                 <li>• Session duration: 15 minutes</li>

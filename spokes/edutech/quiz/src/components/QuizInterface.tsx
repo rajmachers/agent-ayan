@@ -12,6 +12,13 @@ interface QuizInterfaceProps {
   onLogout: () => void;
 }
 
+declare global {
+  interface Window {
+    __PROCTOR_SESSION_MANAGER_URL?: string;
+    __PROCTOR_SESSION_MANAGER_URLS?: string[];
+  }
+}
+
 // Demo quiz data
 const DEMO_QUESTIONS = [
   {
@@ -75,6 +82,24 @@ export default function QuizInterface({ candidateData, onLogout }: QuizInterface
   const [proctoringEnabled, setProctoringEnabled] = useState(false);
   const [simulationEnabled, setSimulationEnabled] = useState(false);
 
+  const getSessionManagerCandidates = () => {
+    const envCandidates = [
+      process.env.NEXT_PUBLIC_SESSION_MANAGER_WS_URL,
+      process.env.NEXT_PUBLIC_PROCTOR_SESSION_MANAGER_WS_URL,
+      process.env.NEXT_PUBLIC_WS_SESSION_MANAGER_URL,
+      process.env.NEXT_PUBLIC_HUB_SESSION_MANAGER_WS_URL,
+    ].filter((url): url is string => Boolean(url && url.trim()));
+
+    const defaults = [
+      'ws://localhost:14181',
+      'ws://localhost:8181',
+      'ws://localhost:8081',
+      'ws://localhost:8080',
+    ];
+
+    return Array.from(new Set([...envCandidates, ...defaults]));
+  };
+
   // Map candidateData to organization structure
   const getOrganizationId = () => {
     if (candidateData.accessCode.startsWith('EXAM')) return '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94'; // CS
@@ -84,6 +109,10 @@ export default function QuizInterface({ candidateData, onLogout }: QuizInterface
 
   // Initialize proctoring SDK when component mounts
   useEffect(() => {
+    const sessionManagerCandidates = getSessionManagerCandidates();
+    window.__PROCTOR_SESSION_MANAGER_URLS = sessionManagerCandidates;
+    window.__PROCTOR_SESSION_MANAGER_URL = sessionManagerCandidates[0];
+
     // Guard: only load script once
     if (document.getElementById('proctor-sdk-script')) return;
     const script = document.createElement('script');
@@ -112,12 +141,15 @@ export default function QuizInterface({ candidateData, onLogout }: QuizInterface
     const existing = window.ProctorSDK.getInstance();
     if (existing && existing.isActive) return;
 
+    const sessionManagerCandidates = getSessionManagerCandidates();
+
     try {
         const proctor = window.ProctorSDK.init({
           candidateId: candidateData.candidateId,
           examId: 'financial-literacy-demo',
           organizationId: getOrganizationId(),
-          sessionManager: 'ws://localhost:8081',
+          sessionManager: sessionManagerCandidates[0],
+          sessionManagerCandidates,
           enableSimulation: simulationEnabled,
           widgetUrl: '/widget.html',
           position: 'top-right',

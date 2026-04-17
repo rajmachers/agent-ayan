@@ -14,8 +14,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Call Control Plane P6 from server-side (avoids CORS)
-    const controlPlaneResponse = await fetch('http://localhost:4101/api/v1/sessions', {
+    // Call Hub Gateway from server-side (container-network reachable)
+    const gatewayBaseUrl = process.env.HUB_GATEWAY_INTERNAL_URL || 'http://hub-gateway:3000';
+    const controlPlaneResponse = await fetch(`${gatewayBaseUrl}/api/v1/sessions/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

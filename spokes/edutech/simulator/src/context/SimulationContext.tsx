@@ -5,7 +5,7 @@ import { Candidate, SimulationSession, SimulationConfig } from '@/types'
 import { ScoreCalculator } from '@/lib/score-calculator'
 import { EventOrchestrator } from '@/lib/event-orchestrator'
 import { apiClient } from '@/lib/api-client'
-import { CANDIDATE_NAMES, BATCHES, SIMULATION_CONFIG, TENANTS } from '@/lib/constants'
+import { CANDIDATE_NAMES, BATCHES, EXAM_TYPES, SIMULATION_CONFIG, TENANTS } from '@/lib/constants'
 import { v4 as uuidv4 } from 'uuid'
 
 interface SimulationContextType {
@@ -18,12 +18,18 @@ interface SimulationContextType {
   getCohortAnalytics: () => any
   simulateScenario: (violationCount: number) => Promise<void>
   loadSessionFromControlPlane: (sessionId: string) => Promise<void>
+  ensureSessionInGateway: () => Promise<void>
   clearSession: () => void
 }
 
 const SimulationContext = createContext<SimulationContextType | undefined>(undefined)
 
 const STORAGE_KEY = 'simulator-session'
+
+const getExamDurationSec = (examType: string): number => {
+  const exam = EXAM_TYPES.find((e) => e.id === examType)
+  return (exam?.duration || 90) * 60
+}
 
 export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<SimulationSession | null>(null)
@@ -36,6 +42,17 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
+        const startedAt = Number(parsed?.startedAt || 0)
+        const examType = String(parsed?.examType || '')
+        const examDurationSec = getExamDurationSec(examType)
+        const elapsedSec = startedAt > 0 ? Math.floor((Date.now() - startedAt) / 1000) : 0
+
+        if (startedAt > 0 && elapsedSec >= examDurationSec) {
+          // Drop stale local session so users don't resume with near-zero timers.
+          localStorage.removeItem(STORAGE_KEY)
+          return
+        }
+
         setSession(parsed)
       } catch (err) {
         console.error('Failed to load session from storage:', err)
@@ -99,7 +116,8 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
         config.examType,
         config.scenario,
         config.tenantName,
-        updatedCandidates
+        updatedCandidates,
+        getExamDurationSec(config.examType)
       )
 
       // Create session object
@@ -281,8 +299,9 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
     setLoading(true)
     setError(null)
     try {
+      const gatewayUrl = process.env.NEXT_PUBLIC_HUB_GATEWAY_URL || 'http://localhost:14001'
       // Fetch session from Control Plane
-      const response = await fetch(`http://localhost:4101/api/v1/sessions/${sessionId}`, {
+      const response = await fetch(`${gatewayUrl}/api/v1/sessions/${sessionId}`, {
         headers: {
           'Authorization': 'Bearer demo-key',
           'Content-Type': 'application/json',
@@ -338,6 +357,44 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [])
 
+  const ensureSessionInGateway = useCallback(async () => {
+    if (!session) return
+
+    const exists = await apiClient.sessionExists(session.id)
+    if (exists) return
+
+    const recreatedSessionId = await apiClient.createSessionsOnControlPlane(
+      session.tenantId,
+      session.batchId,
+      session.examType,
+      session.scenario,
+      session.tenantName,
+      session.candidates,
+      getExamDurationSec(session.examType)
+    )
+
+    const updatedSession: SimulationSession = {
+      ...session,
+      id: recreatedSessionId,
+      updatedAt: Date.now(),
+    }
+
+    setSession(updatedSession)
+
+    await apiClient.updateSessionViolations(
+      recreatedSessionId,
+      updatedSession.candidates.flatMap((c) => c.violations),
+      updatedSession.candidates
+    )
+
+    await apiClient.updateSessionStatus(
+      recreatedSessionId,
+      'active',
+      'Resynced by simulator after gateway restart',
+      updatedSession.candidates
+    )
+  }, [session])
+
   const clearSession = useCallback(() => {
     setSession(null)
     setError(null)
@@ -354,6 +411,7 @@ export const SimulationProvider: React.FC<{ children: ReactNode }> = ({ children
     getCohortAnalytics,
     simulateScenario,
     loadSessionFromControlPlane,
+    ensureSessionInGateway,
     clearSession,
   }
 

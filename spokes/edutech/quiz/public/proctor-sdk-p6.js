@@ -19,11 +19,16 @@
    * ================================================================ */
   function ProctorSession(cfg) {
     this.config = Object.assign({
-      sessionManager: 'ws://localhost:8181',
+      sessionManager: null,
       enableCamera: true,
       enableMic: true,
       enforceFullscreen: true
     }, cfg);
+
+    this._sessionManagerCandidates = this._resolveSessionManagerCandidates(cfg);
+    this._sessionManagerIndex = 0;
+    this._connectAttempts = 0;
+    this._reconnectTimer = null;
 
     this.sessionId = null;
     this.shortId = null;
@@ -112,8 +117,9 @@
         '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' +
           '<span>Violations</span><span id="pw-count" style="font-weight:600;color:#10b981;">0</span>' +
         '</div>' +
+        '<div style="color:#6b7280;font-size:10px;margin-top:6px;">Event log (system + violations)</div>' +
         '<div id="pw-log" style="max-height:90px;overflow-y:auto;margin-top:6px;font-size:11px;">' +
-          '<div style="color:#6b7280;">Monitoring starting…</div>' +
+          '<div style="color:#6b7280;">System: monitoring starting...</div>' +
         '</div>' +
       '</div>';
 
@@ -130,12 +136,21 @@
    * ================================================================ */
   ProctorSession.prototype._connectWS = function () {
     var self = this;
-    var url = this.config.sessionManager + '?type=candidate';
+    var target = this._sessionManagerCandidates[this._sessionManagerIndex] || this._sessionManagerCandidates[0];
+    var url = target.indexOf('?') === -1 ? (target + '?type=candidate') : (target + '&type=candidate');
+
+    this._setStatus('Connecting...', '#f59e0b');
+    this._log('System: connecting to ' + target, '#6b7280');
 
     try { this.ws = new WebSocket(url); }
-    catch (e) { this._setStatus('Error', '#ef4444'); return; }
+    catch (e) {
+      this._setStatus('Error', '#ef4444');
+      this._scheduleReconnect();
+      return;
+    }
 
     this.ws.onopen = function () {
+      self._connectAttempts = 0;
       self._setStatus('Connected', '#10b981');
       self._send({
         type: 'session:start',
@@ -155,9 +170,58 @@
 
     this.ws.onclose = function () {
       self._setStatus('Disconnected', '#ef4444');
-      if (self.isActive) setTimeout(function () { self._connectWS(); }, 3000);
+      self._scheduleReconnect();
     };
-    this.ws.onerror = function () { self._setStatus('Error', '#ef4444'); };
+    this.ws.onerror = function () {
+      self._setStatus('Error', '#ef4444');
+      if (self.ws) {
+        try { self.ws.close(); } catch (_) {}
+      }
+    };
+  };
+
+  ProctorSession.prototype._resolveSessionManagerCandidates = function (cfg) {
+    var win = typeof window !== 'undefined' ? window : {};
+    var out = [];
+
+    function add(url) {
+      if (typeof url !== 'string') return;
+      var normalized = url.trim();
+      if (!normalized) return;
+      if (out.indexOf(normalized) === -1) out.push(normalized);
+    }
+
+    if (cfg && Array.isArray(cfg.sessionManagerCandidates)) {
+      cfg.sessionManagerCandidates.forEach(add);
+    }
+
+    if (win.__PROCTOR_SESSION_MANAGER_URLS && Array.isArray(win.__PROCTOR_SESSION_MANAGER_URLS)) {
+      win.__PROCTOR_SESSION_MANAGER_URLS.forEach(add);
+    }
+
+    add(cfg && cfg.sessionManager);
+    add(win.__PROCTOR_SESSION_MANAGER_URL);
+
+    ['ws://localhost:14181', 'ws://localhost:8181', 'ws://localhost:8081', 'ws://localhost:8080'].forEach(add);
+
+    return out;
+  };
+
+  ProctorSession.prototype._scheduleReconnect = function () {
+    var self = this;
+    if (this._reconnectTimer) return;
+
+    var candidateCount = this._sessionManagerCandidates.length || 1;
+    this._connectAttempts += 1;
+    this._sessionManagerIndex = (this._sessionManagerIndex + 1) % candidateCount;
+
+    var delay = Math.min(1500 + (this._connectAttempts * 500), 5000);
+    this._reconnectTimer = setTimeout(function () {
+      self._reconnectTimer = null;
+      if (!self.isActive || (self.ws && self.ws.readyState !== 1)) {
+        self._connectWS();
+      }
+    }, delay);
   };
 
   ProctorSession.prototype._send = function (o) {

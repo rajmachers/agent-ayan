@@ -36,8 +36,7 @@ interface UseControlPlaneSessionsReturn {
   refreshSessions: () => Promise<void>;
 }
 
-const CONTROL_PLANE_URL = process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || 'http://localhost:4101';
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY || 'demo-key';
+const SESSIONS_API_PATH = '/api/sessions';
 
 export function useControlPlaneSessions(
   autoRefresh = true,
@@ -53,11 +52,21 @@ export function useControlPlaneSessions(
     setError(null);
 
     try {
-      const response = await fetch(`${CONTROL_PLANE_URL}/api/v1/sessions`, {
+      const tenantRaw = typeof window !== 'undefined' ? localStorage.getItem('tenant_session') : null;
+      const tenantSession = tenantRaw ? JSON.parse(tenantRaw) : null;
+      const organizationId = tenantSession?.organizationId;
+
+      const params = new URLSearchParams();
+      if (organizationId) {
+        params.set('organizationId', organizationId);
+      }
+
+      const url = params.toString() ? `${SESSIONS_API_PATH}?${params.toString()}` : SESSIONS_API_PATH;
+
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`,
         },
       });
 

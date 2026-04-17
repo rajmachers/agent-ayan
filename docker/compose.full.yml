@@ -337,7 +337,9 @@ services:
 
   # ══════════════ EDUTECH SPOKE ══════════════
   edu-admin:
-    build: ../spokes/edutech/admin
+    build:
+      context: ..
+      dockerfile: spokes/edutech/admin/Dockerfile
     container_name: edu-admin
     ports: ["3001:3000"]
     environment:
@@ -350,20 +352,25 @@ services:
     restart: unless-stopped
 
   edu-quiz:
-    build: ../spokes/edutech/quiz
+    build:
+      context: ..
+      dockerfile: spokes/edutech/quiz/Dockerfile
     container_name: edu-quiz
     ports: ["3002:3000"]
     environment:
       PORT: 3000
       NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
       NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SESSION_MANAGER_WS_URL: ws://localhost:14181
       NEXT_PUBLIC_SPOKE_ID: edutech
-    depends_on: [hub-gateway, hub-websocket, hub-gatekeeper]
+    depends_on: [hub-gateway, hub-websocket, hub-gatekeeper, hub-session-manager]
     networks: [ayan-network]
     restart: unless-stopped
 
   edu-simulator:
-    build: ../spokes/edutech/simulator
+    build:
+      context: ..
+      dockerfile: spokes/edutech/simulator/Dockerfile
     container_name: edu-simulator
     ports: ["3003:3000"]
     environment:

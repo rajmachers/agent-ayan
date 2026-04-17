@@ -19,6 +19,64 @@ interface SysMetrics {
   platform: { arch: string; type: string; release: string; hostname: string };
 }
 
+const DEFAULT_METRICS: SysMetrics = {
+  cpu: { usage: 0, cores: 1, loadAvg: [0, 0, 0], model: 'Unknown' },
+  memory: { total: 0, used: 0, free: 0, usage: 0 },
+  uptime: { seconds: 0, formatted: '0s' },
+  containers: { total: 0, running: 0, list: [] },
+  platform: { arch: 'unknown', type: 'unknown', release: 'unknown', hostname: 'unknown' },
+};
+
+function normalizeMetrics(payload: unknown): SysMetrics {
+  const raw = (payload && typeof payload === 'object' && 'metrics' in payload)
+    ? (payload as { metrics?: unknown }).metrics
+    : payload;
+
+  if (!raw || typeof raw !== 'object') return DEFAULT_METRICS;
+
+  const r = raw as Partial<SysMetrics>;
+
+  return {
+    cpu: {
+      usage: Number(r.cpu?.usage ?? DEFAULT_METRICS.cpu.usage),
+      cores: Number(r.cpu?.cores ?? DEFAULT_METRICS.cpu.cores),
+      loadAvg: Array.isArray(r.cpu?.loadAvg)
+        ? r.cpu!.loadAvg.map(v => Number(v ?? 0))
+        : DEFAULT_METRICS.cpu.loadAvg,
+      model: String(r.cpu?.model ?? DEFAULT_METRICS.cpu.model),
+    },
+    memory: {
+      total: Number(r.memory?.total ?? DEFAULT_METRICS.memory.total),
+      used: Number(r.memory?.used ?? DEFAULT_METRICS.memory.used),
+      free: Number(r.memory?.free ?? DEFAULT_METRICS.memory.free),
+      usage: Number(r.memory?.usage ?? DEFAULT_METRICS.memory.usage),
+    },
+    uptime: {
+      seconds: Number(r.uptime?.seconds ?? DEFAULT_METRICS.uptime.seconds),
+      formatted: String(r.uptime?.formatted ?? DEFAULT_METRICS.uptime.formatted),
+    },
+    containers: {
+      total: Number(r.containers?.total ?? DEFAULT_METRICS.containers.total),
+      running: Number(r.containers?.running ?? DEFAULT_METRICS.containers.running),
+      list: Array.isArray(r.containers?.list)
+        ? r.containers!.list.map((c: Partial<ContainerInfo>) => ({
+            name: String(c.name ?? 'unknown'),
+            status: String(c.status ?? 'unknown'),
+            cpu: String(c.cpu ?? '0'),
+            memory: String(c.memory ?? '0MB'),
+            ports: String(c.ports ?? ''),
+          }))
+        : DEFAULT_METRICS.containers.list,
+    },
+    platform: {
+      arch: String(r.platform?.arch ?? DEFAULT_METRICS.platform.arch),
+      type: String(r.platform?.type ?? DEFAULT_METRICS.platform.type),
+      release: String(r.platform?.release ?? DEFAULT_METRICS.platform.release),
+      hostname: String(r.platform?.hostname ?? DEFAULT_METRICS.platform.hostname),
+    },
+  };
+}
+
 export default function SystemMonitor() {
   const [metrics, setMetrics] = useState<SysMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +86,7 @@ export default function SystemMonitor() {
   const fetchMetrics = () => {
     fetch('/api/system/metrics')
       .then(r => r.json())
-      .then(data => { setMetrics(data); setLastUpdate(new Date()); setLoading(false); })
+      .then(data => { setMetrics(normalizeMetrics(data)); setLastUpdate(new Date()); setLoading(false); })
       .catch(() => setLoading(false));
   };
 
@@ -42,8 +100,13 @@ export default function SystemMonitor() {
   if (loading) return <div className="text-gray-400 p-8">Loading system metrics...</div>;
   if (!metrics) return <div className="text-red-400 p-8">Failed to load system metrics</div>;
 
-  const cpuColor = metrics.cpu.usage > 80 ? 'text-red-400' : metrics.cpu.usage > 60 ? 'text-yellow-400' : 'text-green-400';
-  const memColor = metrics.memory.usage > 80 ? 'text-red-400' : metrics.memory.usage > 60 ? 'text-yellow-400' : 'text-green-400';
+  const cpuUsage = Number(metrics?.cpu?.usage ?? 0);
+  const memoryUsage = Number(metrics?.memory?.usage ?? 0);
+  const cpuLoadAvg = Array.isArray(metrics?.cpu?.loadAvg) ? metrics.cpu.loadAvg : [0, 0, 0];
+  const cpuCores = Number(metrics?.cpu?.cores ?? 1);
+
+  const cpuColor = cpuUsage > 80 ? 'text-red-400' : cpuUsage > 60 ? 'text-yellow-400' : 'text-green-400';
+  const memColor = memoryUsage > 80 ? 'text-red-400' : memoryUsage > 60 ? 'text-yellow-400' : 'text-green-400';
 
   return (
     <div className="space-y-6">
@@ -64,10 +127,10 @@ export default function SystemMonitor() {
       {/* Host info */}
       <div className="bg-navy-800 rounded-lg p-4 border border-navy-700 flex items-center gap-6 text-sm">
         <Server className="w-5 h-5 text-cyan-400" />
-        <div><span className="text-gray-400">Host:</span> <span className="text-white">{metrics.platform.hostname}</span></div>
-        <div><span className="text-gray-400">OS:</span> <span className="text-white">{metrics.platform.type} {metrics.platform.release}</span></div>
-        <div><span className="text-gray-400">Arch:</span> <span className="text-white">{metrics.platform.arch}</span></div>
-        <div><span className="text-gray-400">Uptime:</span> <span className="text-white">{metrics.uptime.formatted}</span></div>
+        <div><span className="text-gray-400">Host:</span> <span className="text-white">{metrics?.platform?.hostname ?? 'unknown'}</span></div>
+        <div><span className="text-gray-400">OS:</span> <span className="text-white">{metrics?.platform?.type ?? 'unknown'} {metrics?.platform?.release ?? 'unknown'}</span></div>
+        <div><span className="text-gray-400">Arch:</span> <span className="text-white">{metrics?.platform?.arch ?? 'unknown'}</span></div>
+        <div><span className="text-gray-400">Uptime:</span> <span className="text-white">{metrics?.uptime?.formatted ?? '0s'}</span></div>
       </div>
 
       {/* CPU + Memory gauges */}
@@ -78,16 +141,16 @@ export default function SystemMonitor() {
             <div className="relative w-24 h-24">
               <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" strokeWidth="8" />
-                <circle cx="50" cy="50" r="40" fill="none" stroke={metrics.cpu.usage > 80 ? '#f87171' : metrics.cpu.usage > 60 ? '#fbbf24' : '#34d399'} strokeWidth="8" strokeDasharray={`${metrics.cpu.usage * 2.51} 251`} strokeLinecap="round" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke={cpuUsage > 80 ? '#f87171' : cpuUsage > 60 ? '#fbbf24' : '#34d399'} strokeWidth="8" strokeDasharray={`${cpuUsage * 2.51} 251`} strokeLinecap="round" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-xl font-bold ${cpuColor}`}>{metrics.cpu.usage}%</span>
+                <span className={`text-xl font-bold ${cpuColor}`}>{cpuUsage}%</span>
               </div>
             </div>
             <div className="text-sm space-y-1">
-              <p className="text-gray-400">Model: <span className="text-white">{metrics.cpu.model}</span></p>
-              <p className="text-gray-400">Cores: <span className="text-white">{metrics.cpu.cores}</span></p>
-              <p className="text-gray-400">Load (1/5/15): <span className="text-white">{metrics.cpu.loadAvg.map(l => l.toFixed(2)).join(' / ')}</span></p>
+              <p className="text-gray-400">Model: <span className="text-white">{metrics?.cpu?.model ?? 'Unknown'}</span></p>
+              <p className="text-gray-400">Cores: <span className="text-white">{cpuCores}</span></p>
+              <p className="text-gray-400">Load (1/5/15): <span className="text-white">{cpuLoadAvg.map(l => Number(l).toFixed(2)).join(' / ')}</span></p>
             </div>
           </div>
         </div>
@@ -98,16 +161,16 @@ export default function SystemMonitor() {
             <div className="relative w-24 h-24">
               <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="#1e293b" strokeWidth="8" />
-                <circle cx="50" cy="50" r="40" fill="none" stroke={metrics.memory.usage > 80 ? '#f87171' : metrics.memory.usage > 60 ? '#fbbf24' : '#34d399'} strokeWidth="8" strokeDasharray={`${metrics.memory.usage * 2.51} 251`} strokeLinecap="round" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke={memoryUsage > 80 ? '#f87171' : memoryUsage > 60 ? '#fbbf24' : '#34d399'} strokeWidth="8" strokeDasharray={`${memoryUsage * 2.51} 251`} strokeLinecap="round" />
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-xl font-bold ${memColor}`}>{metrics.memory.usage}%</span>
+                <span className={`text-xl font-bold ${memColor}`}>{memoryUsage}%</span>
               </div>
             </div>
             <div className="text-sm space-y-1">
-              <p className="text-gray-400">Total: <span className="text-white">{metrics.memory.total} GB</span></p>
-              <p className="text-gray-400">Used: <span className="text-white">{metrics.memory.used} GB</span></p>
-              <p className="text-gray-400">Free: <span className="text-white">{metrics.memory.free} GB</span></p>
+              <p className="text-gray-400">Total: <span className="text-white">{metrics?.memory?.total ?? 0} GB</span></p>
+              <p className="text-gray-400">Used: <span className="text-white">{metrics?.memory?.used ?? 0} GB</span></p>
+              <p className="text-gray-400">Free: <span className="text-white">{metrics?.memory?.free ?? 0} GB</span></p>
             </div>
           </div>
         </div>
@@ -178,7 +241,7 @@ export default function SystemMonitor() {
       <div className="bg-navy-800 rounded-lg p-5 border border-navy-700">
         <h3 className="text-white font-medium mb-4">System Load Level</h3>
         {(() => {
-          const load = metrics.cpu.loadAvg[0] / metrics.cpu.cores;
+          const load = cpuLoadAvg[0] / Math.max(cpuCores, 1);
           const level = load > 1 ? 'OVERLOADED' : load > 0.7 ? 'HIGH' : load > 0.4 ? 'MODERATE' : 'LOW';
           const color = load > 1 ? 'text-red-400' : load > 0.7 ? 'text-yellow-400' : load > 0.4 ? 'text-blue-400' : 'text-green-400';
           const bgColor = load > 1 ? 'bg-red-400' : load > 0.7 ? 'bg-yellow-400' : load > 0.4 ? 'bg-blue-400' : 'bg-green-400';

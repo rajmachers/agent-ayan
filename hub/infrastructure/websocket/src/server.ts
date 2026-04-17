@@ -14,6 +14,8 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import winston from 'winston';
 import Redis from 'ioredis';
+import fs from 'fs';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
@@ -70,6 +72,29 @@ class WebSocketService {
   }
 
   private setupLogger(): void {
+    const transports: winston.transport[] = [
+      new winston.transports.Console({
+        format: winston.format.combine(
+          winston.format.colorize(),
+          winston.format.simple()
+        )
+      })
+    ];
+
+    const logDir = process.env.LOG_DIR || '/tmp/ayan-logs';
+    try {
+      fs.mkdirSync(logDir, { recursive: true });
+      transports.push(new winston.transports.File({
+        filename: path.join(logDir, 'websocket-service.log'),
+        maxsize: 10485760, // 10MB
+        maxFiles: 5
+      }));
+    } catch (error) {
+      // Continue with console logging only when file log path is unavailable.
+      // This keeps the websocket service alive in restricted container filesystems.
+      console.warn('WebSocket logger file transport disabled:', error);
+    }
+
     this.logger = winston.createLogger({
       level: process.env.LOG_LEVEL || 'info',
       format: winston.format.combine(
@@ -77,19 +102,7 @@ class WebSocketService {
         winston.format.errors({ stack: true }),
         winston.format.json()
       ),
-      transports: [
-        new winston.transports.Console({
-          format: winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple()
-          )
-        }),
-        new winston.transports.File({ 
-          filename: '/app/logs/websocket-service.log',
-          maxsize: 10485760, // 10MB
-          maxFiles: 5
-        })
-      ]
+      transports
     });
   }
 

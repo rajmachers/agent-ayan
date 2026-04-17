@@ -12,7 +12,9 @@ const config = {
   },
   env: process.env.NODE_ENV || 'development',
   cors: {
-    origins: ['http://localhost:3001', 'http://localhost:3002', 'http://localhost:3000']
+    origins: (process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+      : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'])
   }
 };
 
@@ -26,6 +28,114 @@ const logger = {
 
 const app = express() as Application;
 const server = createServer(app);
+
+type GatewaySession = {
+  sessionId: string;
+  candidateId: string;
+  examId: string;
+  batchId?: string;
+  examDurationSec?: number;
+  candidateCount?: number;
+  candidates?: Array<{ id?: string; email?: string; name?: string; status?: string; violations?: any[]; score?: number }>;
+  orgId: string;
+  status:
+    | 'active'
+    | 'paused'
+    | 'locked'
+    | 'terminated'
+    | 'submitted'
+    | 'auto_submitted'
+    | 'time_expired'
+    | 'aborted';
+  startTime: string;
+  lastActivityAt?: string;
+  endTime?: string;
+  endReason?: string;
+  aiMonitoring: {
+    vision: { status: string; confidence: number };
+    audio: { status: string; confidence: number };
+    behavior: { status: string; confidence: number };
+    screen: { status: string; confidence: number };
+  };
+  violations: any[];
+  score: {
+    current: number;
+    credibilityIndex: number;
+    riskLevel: string;
+  };
+};
+
+const sessionStore = new Map<string, GatewaySession>();
+
+const TERMINAL_STATUSES = new Set(['terminated', 'submitted', 'auto_submitted', 'time_expired', 'aborted']);
+
+const sanitizeTimestamp = (value: unknown): string => {
+  if (!value) return new Date().toISOString();
+  if (typeof value === 'number') return new Date(value).toISOString();
+  const parsed = new Date(String(value));
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString();
+  return parsed.toISOString();
+};
+
+const inferViolationSource = (type: string, explicit?: string): string => {
+  if (explicit) return explicit;
+  const t = String(type || '').toLowerCase();
+
+  if (t.includes('audio') || t.includes('voice') || t.includes('noise')) return 'ai-audio';
+  if (t.includes('face') || t.includes('eye') || t.includes('gaze') || t.includes('camera')) return 'ai-vision';
+  if (t.includes('typing') || t.includes('behavior') || t.includes('movement')) return 'ai-behavior';
+  return 'browser-monitor';
+};
+
+const isActiveLikeStatus = (status: string): boolean => ['active', 'paused', 'locked'].includes(status);
+
+const deriveSessionStatusFromCandidates = (
+  candidates: Array<{ status?: string }> | undefined,
+  currentStatus: GatewaySession['status']
+): GatewaySession['status'] => {
+  if (!Array.isArray(candidates) || candidates.length === 0) return currentStatus;
+
+  const statuses = candidates
+    .map((c) => String(c.status || '').toLowerCase())
+    .filter(Boolean);
+
+  if (statuses.length === 0) return currentStatus;
+
+  const allSubmitted = statuses.every((s) => s === 'submitted');
+  const allTerminated = statuses.every((s) => s === 'terminated');
+  const anyActiveLike = statuses.some((s) => s === 'active' || s === 'paused' || s === 'locked');
+
+  if (allSubmitted) return 'submitted';
+  if (allTerminated) return 'terminated';
+  if (anyActiveLike) return currentStatus;
+  return currentStatus;
+};
+
+const applyAutoExpiry = (session: GatewaySession): GatewaySession => {
+  if (!isActiveLikeStatus(session.status)) return session;
+
+  const durationSec = Number(session.examDurationSec || 1800);
+  const elapsedSec = Math.max(0, Math.floor((Date.now() - new Date(session.startTime).getTime()) / 1000));
+
+  if (elapsedSec >= durationSec) {
+    return {
+      ...session,
+      status: 'time_expired',
+      endTime: session.endTime || new Date().toISOString(),
+      endReason: session.endReason || 'Exam duration exceeded',
+      lastActivityAt: new Date().toISOString(),
+    };
+  }
+
+  return session;
+};
+
+const getRiskLevel = (credibilityIndex: number): 'low' | 'medium' | 'high' | 'critical' => {
+  if (credibilityIndex >= 0.9) return 'low';
+  if (credibilityIndex >= 0.75) return 'medium';
+  if (credibilityIndex >= 0.55) return 'high';
+  return 'critical';
+};
 
 // Security middleware
 app.use(helmet({
@@ -112,7 +222,9 @@ app.get('/', (req: Request, res: Response) => {
     environment: config.env,
     endpoints: {
       health: 'GET /health',
-      sessions: 'POST /api/v1/sessions - Start proctoring session',
+      sessions: 'GET /api/v1/sessions - List proctoring sessions',
+      startSession: 'POST /api/v1/sessions/start - Start proctoring session',
+      createSession: 'POST /api/v1/sessions - Alias for start session',
       sessionStatus: 'GET /api/v1/sessions/:sessionId - Get session status',
       analytics: 'GET /api/v1/sessions/:sessionId/analytics - Session analytics',
       playback: 'GET /api/v1/sessions/:sessionId/playback - Session playback'
@@ -121,22 +233,50 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // Session management endpoints
-app.post('/api/v1/sessions/start', basicAuth, (req: Request, res: Response) => {
-  const { candidateId, examId, token } = req.body;
+const createSessionHandler = (req: Request, res: Response) => {
+  const {
+    candidateId,
+    examId,
+    examType,
+    organizationId,
+    tenantId,
+    batchId,
+    examDurationSec,
+    candidates,
+  } = req.body;
   const user = (req as any).user;
+  const orgId = organizationId || tenantId || user.orgId;
+  const firstCandidateEmail = Array.isArray(candidates) && candidates.length > 0
+    ? candidates[0]?.email
+    : undefined;
+  const resolvedCandidateId = candidateId || firstCandidateEmail || 'simulated-candidate';
+  const resolvedExamId = examId || examType || 'simulated-exam';
+  const resolvedCandidateCount = Array.isArray(candidates) ? candidates.length : 1;
   
-  logger.info('Starting proctoring session', { candidateId, examId, orgId: user.orgId });
+  logger.info('Starting proctoring session', {
+    candidateId: resolvedCandidateId,
+    examId: resolvedExamId,
+    orgId,
+    batchId,
+    candidateCount: resolvedCandidateCount,
+    examDurationSec: Number(examDurationSec || 1800),
+  });
   
   const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
   // Mock session data
   const session = {
     sessionId,
-    candidateId,
-    examId,
-    orgId: user.orgId,
+    candidateId: resolvedCandidateId,
+    examId: resolvedExamId,
+    batchId,
+    examDurationSec: Number(examDurationSec || 1800),
+    candidateCount: resolvedCandidateCount,
+    candidates: Array.isArray(candidates) ? candidates : undefined,
+    orgId,
     status: 'active',
     startTime: new Date().toISOString(),
+    lastActivityAt: new Date().toISOString(),
     aiMonitoring: {
       vision: { status: 'active', confidence: 0.95 },
       audio: { status: 'active', confidence: 0.92 },
@@ -149,7 +289,9 @@ app.post('/api/v1/sessions/start', basicAuth, (req: Request, res: Response) => {
       credibilityIndex: 0.94,
       riskLevel: 'low'
     }
-  };
+  } as GatewaySession;
+
+  sessionStore.set(sessionId, session);
   
   res.json({
     success: true,
@@ -157,11 +299,196 @@ app.post('/api/v1/sessions/start', basicAuth, (req: Request, res: Response) => {
     session,
     message: 'AI proctoring session started successfully'
   });
+};
+
+app.post('/api/v1/sessions/start', basicAuth, createSessionHandler);
+
+// Backwards-compatible alias used by some clients.
+app.post('/api/v1/sessions', basicAuth, createSessionHandler);
+
+app.get('/api/v1/sessions', basicAuth, (req: Request, res: Response) => {
+  const { organizationId, status } = req.query;
+
+  let sessions = Array.from(sessionStore.values()).map((session) => {
+    const hydrated = applyAutoExpiry(session);
+    if (hydrated !== session) sessionStore.set(hydrated.sessionId, hydrated);
+    return hydrated;
+  });
+
+  if (typeof organizationId === 'string' && organizationId.trim()) {
+    sessions = sessions.filter((session) => session.orgId === organizationId);
+  }
+
+  if (typeof status === 'string' && status.trim() && status !== 'all') {
+    sessions = sessions.filter((session) => session.status === status);
+  }
+
+  sessions.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+
+  res.json({
+    success: true,
+    sessions,
+    count: sessions.length
+  });
+});
+
+app.post('/api/v1/sessions/:sessionId/violations', basicAuth, (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const storedSession = sessionStore.get(sessionId);
+
+  if (!storedSession) {
+    return res.status(404).json({
+      success: false,
+      error: 'Session not found',
+      sessionId
+    });
+  }
+
+  const arrayPayload = Array.isArray(req.body?.violations) ? req.body.violations : [];
+  const singlePayload = req.body?.violationType || req.body?.type
+    ? [{
+        type: req.body?.violationType || req.body?.type,
+        severity: req.body?.severity,
+        description: req.body?.description,
+        candidateId: req.body?.candidateId,
+        timestamp: req.body?.timestamp,
+        source: req.body?.source,
+      }]
+    : [];
+  const incomingViolations = [...arrayPayload, ...singlePayload];
+
+  if (Array.isArray(req.body?.candidates)) {
+    storedSession.candidates = req.body.candidates;
+    storedSession.candidateCount = req.body.candidates.length;
+  }
+
+  const candidateDerivedStatus = deriveSessionStatusFromCandidates(storedSession.candidates, storedSession.status);
+  if (candidateDerivedStatus !== storedSession.status) {
+    storedSession.status = candidateDerivedStatus;
+    if (TERMINAL_STATUSES.has(candidateDerivedStatus)) {
+      storedSession.endTime = storedSession.endTime || new Date().toISOString();
+      storedSession.endReason = storedSession.endReason || 'Candidate lifecycle completed';
+    }
+  }
+
+  const mergedViolations = [
+    ...storedSession.violations,
+    ...incomingViolations
+      .map((v: any, index: number) => ({
+        id: v.id || `v_${Date.now()}_${index}`,
+        type: v.type || 'unknown',
+        severity: v.severity || 'warning',
+        description: v.description || `${v.type || 'Unknown'} violation`,
+        timestamp: sanitizeTimestamp(v.timestamp),
+        candidateId: v.candidateId,
+        source: inferViolationSource(v.type || 'unknown', v.source),
+      }))
+  ];
+
+  const cappedViolations = mergedViolations.slice(-200);
+  const weightedPenalty = cappedViolations.reduce((acc, violation) => {
+    const severity = String(violation.severity || 'warning').toLowerCase();
+    const step = severity === 'critical' ? 0.06 : severity === 'warning' ? 0.03 : 0.015;
+    return acc + step;
+  }, 0);
+  const violationPenalty = Math.min(weightedPenalty, 0.85);
+  const updatedCredibility = Math.max(0.15, 0.94 - violationPenalty);
+  const updatedScore = Math.max(10, Math.round(updatedCredibility * 100));
+  const updatedRiskLevel = getRiskLevel(updatedCredibility);
+
+  storedSession.violations = cappedViolations;
+  storedSession.score = {
+    current: updatedScore,
+    credibilityIndex: updatedCredibility,
+    riskLevel: updatedRiskLevel,
+  };
+  storedSession.lastActivityAt = new Date().toISOString();
+
+  const maybeExpired = applyAutoExpiry(storedSession);
+  sessionStore.set(sessionId, maybeExpired);
+
+  res.json({
+    success: true,
+    sessionId,
+    violationCount: maybeExpired.violations.length,
+    score: maybeExpired.score,
+    status: maybeExpired.status,
+  });
+});
+
+app.post('/api/v1/sessions/:sessionId/status', basicAuth, (req: Request, res: Response) => {
+  const { sessionId } = req.params;
+  const storedSession = sessionStore.get(sessionId);
+
+  if (!storedSession) {
+    return res.status(404).json({ success: false, error: 'Session not found', sessionId });
+  }
+
+  const requestedStatus = String(req.body?.status || '').toLowerCase();
+  const allowedStatuses: GatewaySession['status'][] = [
+    'active',
+    'paused',
+    'locked',
+    'terminated',
+    'submitted',
+    'auto_submitted',
+    'time_expired',
+    'aborted',
+  ];
+
+  if (!allowedStatuses.includes(requestedStatus as GatewaySession['status'])) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid session status',
+      status: requestedStatus,
+      allowedStatuses,
+    });
+  }
+
+  const status = requestedStatus as GatewaySession['status'];
+  storedSession.status = status;
+  storedSession.lastActivityAt = new Date().toISOString();
+
+  if (TERMINAL_STATUSES.has(status)) {
+    storedSession.endTime = storedSession.endTime || new Date().toISOString();
+    storedSession.endReason = String(req.body?.reason || req.body?.source || 'Session completed');
+  }
+
+  if (Array.isArray(req.body?.candidates)) {
+    storedSession.candidates = req.body.candidates;
+    storedSession.candidateCount = req.body.candidates.length;
+  }
+
+  const derivedFromCandidates = deriveSessionStatusFromCandidates(storedSession.candidates, storedSession.status);
+  storedSession.status = derivedFromCandidates;
+  if (TERMINAL_STATUSES.has(derivedFromCandidates)) {
+    storedSession.endTime = storedSession.endTime || new Date().toISOString();
+  }
+
+  sessionStore.set(sessionId, storedSession);
+
+  res.json({
+    success: true,
+    sessionId,
+    status: storedSession.status,
+    endTime: storedSession.endTime,
+    lastActivityAt: storedSession.lastActivityAt,
+  });
 });
 
 // Get session status
 app.get('/api/v1/sessions/:sessionId', basicAuth, (req: Request, res: Response) => {
   const { sessionId } = req.params;
+
+  const storedSession = sessionStore.get(sessionId);
+  if (storedSession) {
+    const hydrated = applyAutoExpiry(storedSession);
+    if (hydrated !== storedSession) sessionStore.set(sessionId, hydrated);
+    return res.json({
+      success: true,
+      session: hydrated
+    });
+  }
   
   // Mock session status
   const mockStatus = {
@@ -364,11 +691,20 @@ app.post('/api/v1/sessions/:sessionId/stop', basicAuth, (req: Request, res: Resp
   const { sessionId } = req.params;
   
   logger.info('Stopping proctoring session', { sessionId });
+
+  const storedSession = sessionStore.get(sessionId);
+  if (storedSession) {
+    storedSession.status = 'terminated';
+    storedSession.endTime = new Date().toISOString();
+    storedSession.endReason = 'Terminated by admin';
+    storedSession.lastActivityAt = new Date().toISOString();
+    sessionStore.set(sessionId, storedSession);
+  }
   
   res.json({
     success: true,
     sessionId,
-    status: 'stopped',
+    status: 'terminated',
     stopTime: new Date().toISOString(),
     message: 'AI proctoring session stopped successfully'
   });
@@ -401,8 +737,12 @@ app.use('*', (req: Request, res: Response) => {
     availableRoutes: [
       'GET /health',
       'GET /',
+      'GET /api/v1/sessions',
+      'POST /api/v1/sessions',
       'POST /api/v1/sessions/start',
       'GET /api/v1/sessions/:sessionId',
+      'POST /api/v1/sessions/:sessionId/violations',
+      'POST /api/v1/sessions/:sessionId/status',
       'POST /api/v1/sessions/:sessionId/stop',
       'GET /api/v1/sessions/:sessionId/analytics',
       'GET /api/v1/sessions/:sessionId/playback'

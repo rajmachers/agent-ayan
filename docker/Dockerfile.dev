@@ -1,0 +1,31 @@
+FROM node:20-alpine
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN corepack enable
+WORKDIR /workspace
+
+ARG WORKSPACE_FILTER=@ayan/spoke-edutech-admin
+ARG WORKSPACE_PATH=spokes/edutech/admin
+
+# Dependency layer: copy only files that affect workspace dependency graph.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY hub/gateway/package.json ./hub/gateway/package.json
+COPY hub/control-plane/package.json ./hub/control-plane/package.json
+COPY hub/infrastructure/websocket/package.json ./hub/infrastructure/websocket/package.json
+COPY hub/infrastructure/session-manager/package.json ./hub/infrastructure/session-manager/package.json
+COPY hub/playback-service/package.json ./hub/playback-service/package.json
+COPY hub/sdk/types/package.json ./hub/sdk/types/package.json
+COPY hub/sdk/client-sdk/package.json ./hub/sdk/client-sdk/package.json
+COPY hub/sdk/service-sdk/package.json ./hub/sdk/service-sdk/package.json
+COPY spokes/edutech/admin/package.json ./spokes/edutech/admin/package.json
+COPY spokes/edutech/quiz/package.json ./spokes/edutech/quiz/package.json
+COPY spokes/edutech/simulator/package.json ./spokes/edutech/simulator/package.json
+
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+  pnpm install --frozen-lockfile --filter "${WORKSPACE_FILTER}..."
+
+WORKDIR /workspace/${WORKSPACE_PATH}
+EXPOSE 3000
+CMD ["pnpm", "dev"]

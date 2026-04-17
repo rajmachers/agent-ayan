@@ -5,7 +5,7 @@ export class APIClient {
   private client: AxiosInstance
   private baseURL: string
 
-  constructor(baseURL: string = 'http://localhost:4101') {
+  constructor(baseURL: string = process.env.NEXT_PUBLIC_HUB_GATEWAY_URL || 'http://localhost:14001') {
     this.baseURL = baseURL
     this.client = axios.create({
       baseURL,
@@ -154,7 +154,8 @@ export class APIClient {
     examType: string,
     scenario: string,
     tenantName?: string,
-    candidates?: any[]
+    candidates?: any[],
+    examDurationSec?: number
   ): Promise<string> {
     try {
       const response = await this.client.post(`/api/v1/sessions`, {
@@ -164,6 +165,7 @@ export class APIClient {
         examType,
         scenario,
         candidates: candidates || [],
+        examDurationSec,
         timestamp: Date.now(),
       })
       return response.data.sessionId || response.data.data?.sessionId
@@ -195,6 +197,41 @@ export class APIClient {
   }
 
   /**
+   * Update session lifecycle status (active, submitted, time_expired, etc.)
+   */
+  async updateSessionStatus(
+    sessionId: string,
+    status: string,
+    reason?: string,
+    candidates?: any[]
+  ): Promise<{ success: boolean }> {
+    try {
+      const response = await this.client.post(`/api/v1/sessions/${sessionId}/status`, {
+        status,
+        reason,
+        candidates,
+        timestamp: Date.now(),
+      })
+      return { success: response.data.success !== false }
+    } catch (error: any) {
+      console.warn('Failed to update session status:', error.message)
+      return { success: false }
+    }
+  }
+
+  /**
+   * Check whether a session currently exists in gateway store
+   */
+  async sessionExists(sessionId: string): Promise<boolean> {
+    try {
+      const response = await this.client.get(`/api/v1/sessions/${sessionId}`)
+      return !!response.data?.success
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Create mock session for fallback
    */
   private createMockSession(): SimulationSession {
@@ -220,4 +257,4 @@ export class APIClient {
 }
 
 // Create singleton instance
-export const apiClient = new APIClient(process.env.NEXT_PUBLIC_CONTROL_PLANE_URL || 'http://localhost:4101')
+export const apiClient = new APIClient(process.env.NEXT_PUBLIC_HUB_GATEWAY_URL || 'http://localhost:14001')

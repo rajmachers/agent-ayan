@@ -78,10 +78,10 @@ export default function LoginPage() {
       }
 
       // Demo credentials check
-      if ((form.email === 'admin@cs.university.edu' && form.password === 'demo123' && form.organization === '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94') ||
+        if ((form.email === 'admin@cs.university.edu' && form.password === 'demo123' && form.organization === '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94') ||
           (form.email === 'proctor@eng.college.edu' && form.password === 'demo123' && form.organization === '123e4567-e89b-12d3-a456-426614174000') ||
           (form.email === 'examiner@business.school.edu' && form.password === 'demo123' && form.organization === '987fcdeb-51a2-43d7-8f9e-123456789abc') ||
-          (form.email === 'superadmin@ayan.ai' && form.password === 'admin123' && form.organization === 'system-admin-001')) {
+          ((form.email === 'superadmin@ayan.ai' || form.email === 'admin@ayan.ai') && form.password === 'admin123' && form.organization === 'system-admin-001')) {
         
         // Create session
         const session = {
@@ -213,6 +213,10 @@ export default function LoginPage() {
         <div className="mt-6 bg-navy-900/40 border border-white/10 rounded-xl p-4">
           <h3 className="text-white font-medium mb-3">Demo Credentials</h3>
           <div className="space-y-2 text-sm">
+            <div>
+              <p className="text-cyan-400">System Admin:</p>
+              <p className="text-gray-400">admin@ayan.ai / admin123</p>
+            </div>
             <div>
               <p className="text-cyan-400">CS Department:</p>
               <p className="text-gray-400">admin@cs.university.edu / demo123</p>

@@ -50,7 +50,7 @@ export const EXAM_TYPES = [
 // Tenants (shared between Admin and Simulator)
 export const TENANTS = [
   {
-    id: 'cs-university',
+    id: '554be9e2-7918-4c1f-8d5b-ad2a3a2abd94',
     name: 'Computer Science Department - University',
     domain: 'cs.university.edu',
     status: 'active',
@@ -59,7 +59,7 @@ export const TENANTS = [
     spocEmail: 'rajesh@cs.university.edu',
   },
   {
-    id: 'eng-college',
+    id: '123e4567-e89b-12d3-a456-426614174000',
     name: 'Engineering College Assessment Center',
     domain: 'eng.college.edu',
     status: 'active',
@@ -68,7 +68,7 @@ export const TENANTS = [
     spocEmail: 'sarah@eng.college.edu',
   },
   {
-    id: 'business-school',
+    id: '987fcdeb-51a2-43d7-8f9e-123456789abc',
     name: 'Business School Testing Services',
     domain: 'business.school.edu',
     status: 'trial',

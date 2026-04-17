@@ -1,0 +1,235 @@
+version: '3.8'
+
+services:
+  hub-postgres:
+    image: postgres:15-alpine
+    container_name: hub-postgres
+    ports:
+      - "14541:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-agent_ayan_db}
+      POSTGRES_USER: ${POSTGRES_USER:-ayan_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_production}
+    volumes:
+      - hub_postgres_data:/var/lib/postgresql/data
+      - ../hub/infrastructure/database/hub-schema.sql:/docker-entrypoint-initdb.d/01-hub-schema.sql
+      - ../spokes/edutech/database/edutech-schema.sql:/docker-entrypoint-initdb.d/10-edutech-schema.sql
+    networks:
+      - ayan-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ayan_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hub-redis:
+    image: redis:7.0-alpine
+    container_name: hub-redis
+    ports:
+      - "14631:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-changeme_in_production}
+    volumes:
+      - hub_redis_data:/data
+    networks:
+      - ayan-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme_in_production}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hub-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/hub-gateway'
+        WORKSPACE_PATH: hub/gateway
+    container_name: hub-gateway
+    working_dir: /workspace/hub/gateway
+    command: pnpm --filter @ayan/hub-gateway dev
+    ports:
+      - "14001:3000"
+    environment:
+      PORT: 3000
+      HUB_CONTROL_PLANE_URL: http://hub-control-plane:3000
+      HUB_GATEKEEPER_URL: http://hub-gatekeeper:3000
+      HUB_GHOST_PROCTOR_URL: http://hub-ghost-proctor:3000
+      HUB_DECISION_SUPPORT_URL: http://hub-decision-support:3000
+      HUB_LEARNING_ENGINE_URL: http://hub-learning-engine:3000
+      HUB_AGENT_RUNTIME_URL: http://hub-agent-runtime:3000
+      HUB_AI_VISION_URL: http://hub-ai-vision:8001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      CORS_ORIGIN: http://localhost:3001,http://localhost:3002,http://localhost:3003
+      JWT_SECRET: ${JWT_SECRET:-changeme_32_char_random_secret_here}
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ../hub/gateway:/workspace/hub/gateway
+      - hub_gateway_node_modules:/workspace/hub/gateway/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on:
+      hub-postgres: { condition: service_healthy }
+      hub-redis: { condition: service_healthy }
+    networks: [ayan-network]
+    restart: unless-stopped
+
+  hub-control-plane:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/hub-control-plane'
+        WORKSPACE_PATH: hub/control-plane
+    container_name: hub-control-plane
+    working_dir: /workspace/hub/control-plane
+    command: pnpm --filter @ayan/hub-control-plane dev
+    ports:
+      - "14002:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ayan_admin}:${POSTGRES_PASSWORD:-changeme_in_production}@hub-postgres:5432/${POSTGRES_DB:-agent_ayan_db}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ../hub/control-plane:/workspace/hub/control-plane
+      - hub_control_plane_node_modules:/workspace/hub/control-plane/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on:
+      hub-postgres: { condition: service_healthy }
+      hub-redis: { condition: service_healthy }
+    networks: [ayan-network]
+    restart: unless-stopped
+
+  hub-websocket:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/hub-websocket'
+        WORKSPACE_PATH: hub/infrastructure/websocket
+    container_name: hub-websocket
+    working_dir: /workspace/hub/infrastructure/websocket
+    command: pnpm --filter @ayan/hub-websocket dev
+    ports:
+      - "14801:3000"
+    environment:
+      PORT: 3000
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      CORS_ORIGIN: http://localhost:3001,http://localhost:3002,http://localhost:3003
+      JWT_SECRET: ${JWT_SECRET:-changeme_32_char_random_secret_here}
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - ../hub/infrastructure/websocket:/workspace/hub/infrastructure/websocket
+      - hub_websocket_node_modules:/workspace/hub/infrastructure/websocket/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on:
+      hub-redis: { condition: service_healthy }
+    networks: [ayan-network]
+    restart: unless-stopped
+
+  edu-admin:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/spoke-edutech-admin'
+        WORKSPACE_PATH: spokes/edutech/admin
+    container_name: edu-admin
+    working_dir: /workspace/spokes/edutech/admin
+    command: pnpm exec next dev -H 0.0.0.0 -p 3000
+    ports:
+      - "3001:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../spokes/edutech/admin:/workspace/spokes/edutech/admin
+      - ../hub/sdk/types:/workspace/hub/sdk/types
+      - ../hub/sdk/service-sdk:/workspace/hub/sdk/service-sdk
+      - ../hub/sdk/client-sdk:/workspace/hub/sdk/client-sdk
+      - ../spokes/tsconfig.json:/workspace/spokes/tsconfig.json
+      - edu_admin_node_modules:/workspace/spokes/edutech/admin/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on: [hub-gateway, hub-websocket]
+    networks: [ayan-network]
+    restart: unless-stopped
+
+  edu-quiz:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/spoke-edutech-quiz'
+        WORKSPACE_PATH: spokes/edutech/quiz
+    container_name: edu-quiz
+    working_dir: /workspace/spokes/edutech/quiz
+    command: pnpm exec next dev -H 0.0.0.0 -p 3000
+    ports:
+      - "3002:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../spokes/edutech/quiz:/workspace/spokes/edutech/quiz
+      - ../hub/sdk/types:/workspace/hub/sdk/types
+      - ../hub/sdk/client-sdk:/workspace/hub/sdk/client-sdk
+      - ../spokes/tsconfig.json:/workspace/spokes/tsconfig.json
+      - edu_quiz_node_modules:/workspace/spokes/edutech/quiz/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on: [hub-gateway, hub-websocket]
+    networks: [ayan-network]
+    restart: unless-stopped
+
+  edu-simulator:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      args:
+        WORKSPACE_FILTER: '@ayan/spoke-edutech-simulator'
+        WORKSPACE_PATH: spokes/edutech/simulator
+    container_name: edu-simulator
+    working_dir: /workspace/spokes/edutech/simulator
+    command: pnpm exec next dev -H 0.0.0.0 -p 3000
+    ports:
+      - "3003:3000"
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_HUB_GATEWAY_URL: http://localhost:14001
+      NEXT_PUBLIC_HUB_WEBSOCKET_URL: ws://localhost:14801
+      NEXT_PUBLIC_SPOKE_ID: edutech
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../spokes/edutech/simulator:/workspace/spokes/edutech/simulator
+      - ../hub/sdk/types:/workspace/hub/sdk/types
+      - ../hub/sdk/client-sdk:/workspace/hub/sdk/client-sdk
+      - ../spokes/tsconfig.json:/workspace/spokes/tsconfig.json
+      - edu_simulator_node_modules:/workspace/spokes/edutech/simulator/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on: [hub-gateway]
+    networks: [ayan-network]
+    restart: unless-stopped
+
+networks:
+  ayan-network:
+    driver: bridge
+
+volumes:
+  hub_postgres_data:
+  hub_redis_data:
+  hub_gateway_node_modules:
+  hub_control_plane_node_modules:
+  hub_websocket_node_modules:
+  edu_admin_node_modules:
+  edu_quiz_node_modules:
+  edu_simulator_node_modules:
+  pnpm_store:

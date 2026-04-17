@@ -53,6 +53,22 @@ export function useProctoring(options: UseProctoringOptions): UseProctoringRetur
   const behaviorIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoInitTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  const resolveSessionManagerWsUrl = useCallback(() => {
+    const candidates = [
+      process.env.NEXT_PUBLIC_SESSION_MANAGER_WS_URL,
+      process.env.NEXT_PUBLIC_PROCTOR_SESSION_MANAGER_WS_URL,
+      process.env.NEXT_PUBLIC_WS_SESSION_MANAGER_URL,
+      process.env.NEXT_PUBLIC_HUB_SESSION_MANAGER_WS_URL,
+      'ws://localhost:14181',
+      'ws://localhost:8181',
+      'ws://localhost:8081',
+      'ws://localhost:8080'
+    ];
+
+    const firstValid = candidates.find((url) => typeof url === 'string' && url.trim().length > 0);
+    return firstValid || 'ws://localhost:8181';
+  }, []);
+
   const connect = useCallback(() => {
     if (isConnected || ws) {
       console.log(`🔧 DEBUG: Already connected [${connectionKey}], skipping...`);
@@ -62,7 +78,7 @@ export function useProctoring(options: UseProctoringOptions): UseProctoringRetur
     console.log(`🔧 DEBUG: Initiating WebSocket connection for [${connectionKey}]...`);
     
     try {
-      const wsUrl = new URL('ws://localhost:8080');
+      const wsUrl = new URL(resolveSessionManagerWsUrl());
       wsUrl.searchParams.set('type', 'candidate');
       wsUrl.searchParams.set('organizationId', organizationId);
       wsUrl.searchParams.set('connectionKey', connectionKey); // Add unique identifier
@@ -106,7 +122,7 @@ export function useProctoring(options: UseProctoringOptions): UseProctoringRetur
     } catch (error) {
       console.error(`❌ Error creating WebSocket [${connectionKey}]:`, error);
     }
-  }, [organizationId, autoConnect, isConnected, ws, isSessionActive, connectionKey]);
+  }, [organizationId, autoConnect, isConnected, ws, isSessionActive, connectionKey, resolveSessionManagerWsUrl]);
 
   const disconnect = useCallback(() => {
     if (ws) {

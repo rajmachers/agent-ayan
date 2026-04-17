@@ -1,31 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-/**
- * Fetch a session from the Control Plane API.
- */
-async function fetchSessionFromControlPlane(sessionId: string): Promise<any> {
-  try {
-    const response = await fetch(`http://localhost:4101/api/v1/sessions/${sessionId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer demo-key',
-      },
-    });
+type GatewaySession = {
+  sessionId: string;
+  candidateId: string;
+  examId: string;
+  batchId?: string;
+  candidates?: Array<{ id?: string; email?: string; name?: string; score?: number; violations?: any[] }>;
+  orgId: string;
+  status: string;
+  startTime: string;
+  endTime?: string;
+  violations?: any[];
+  score?: {
+    current?: number;
+    credibilityIndex?: number;
+    riskLevel?: string;
+  };
+};
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(`Control Plane API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data.session || null;
-  } catch (error) {
-    console.error('❌ Error fetching from Control Plane:', error);
-    throw error;
+function parseRowSessionId(rawSessionId: string): { baseSessionId: string; candidateIndex: number | null } {
+  const marker = '__c';
+  const markerIdx = rawSessionId.lastIndexOf(marker);
+  if (markerIdx === -1) {
+    return { baseSessionId: rawSessionId, candidateIndex: null };
   }
+
+  const baseSessionId = rawSessionId.slice(0, markerIdx);
+  const suffix = rawSessionId.slice(markerIdx + marker.length);
+  const candidateIndex = Number.parseInt(suffix, 10) - 1;
+
+  if (Number.isNaN(candidateIndex) || candidateIndex < 0) {
+    return { baseSessionId: rawSessionId, candidateIndex: null };
+  }
+
+  return { baseSessionId, candidateIndex };
+}
+
+async function fetchSessionFromGateway(sessionId: string): Promise<GatewaySession | null> {
+  const gatewayBaseUrl = process.env.HUB_GATEWAY_INTERNAL_URL || 'http://hub-gateway:3000';
+  const response = await fetch(`${gatewayBaseUrl}/api/v1/sessions/${sessionId}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': 'demo-key',
+    },
+    cache: 'no-store',
+  });
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(`Gateway API error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.session || null;
 }
 
 export async function GET(
@@ -33,63 +64,64 @@ export async function GET(
   { params }: { params: { sessionId: string } }
 ) {
   try {
-    const sessionId = params.sessionId;
-    if (!sessionId) {
+    const requestedSessionId = params.sessionId;
+    if (!requestedSessionId) {
       return NextResponse.json({ success: false, error: 'Session ID is required' }, { status: 400 });
     }
 
-    console.log(`🔍 Fetching session detail from Control Plane for ID: ${sessionId}`);
-
-    const session = await fetchSessionFromControlPlane(sessionId);
+    const { baseSessionId, candidateIndex } = parseRowSessionId(requestedSessionId);
+    const session = await fetchSessionFromGateway(baseSessionId);
 
     if (!session) {
       return NextResponse.json({ success: false, error: 'Session not found' }, { status: 404 });
     }
 
-    // Calculate duration
-    const startedAt = session.startedAt ? new Date(session.startedAt) : new Date();
-    const endedAt = session.endedAt ? new Date(session.endedAt) : new Date();
-    const duration = Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000);
+    const candidate =
+      candidateIndex !== null && Array.isArray(session.candidates)
+        ? session.candidates[candidateIndex]
+        : null;
 
-    // Sort violations reverse chronologically (newest first)
-    const sortedViolations = (session.violations || [])
-      .map((v: any, i: number) => ({
-        id: v.id || `v-${i}`,
-        type: v.type,
-        severity: v.severity || 'warning',
-        timestamp: v.timestamp,
-        description: v.description,
-        confidence: v.confidence || 85,
-        resolved: false,
-        source: v.source || 'browser-monitor',
-        evidence: v.evidence || null
-      }))
-      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    const startedAt = new Date(session.startTime);
+    const endedAt = session.endTime ? new Date(session.endTime) : null;
+    const duration = Math.floor(((endedAt || new Date()).getTime() - startedAt.getTime()) / 1000);
+
+    const sessionViolations = Array.isArray(session.violations) ? session.violations : [];
+    const candidateViolations = Array.isArray(candidate?.violations) ? candidate!.violations : [];
+    const mergedViolations = [...sessionViolations, ...candidateViolations];
+
+    const credibilityIndex = Math.max(
+      0,
+      Math.min(1, Number(session.score?.credibilityIndex ?? (session.score?.current ?? 95) / 100))
+    );
 
     return NextResponse.json({
       success: true,
       session: {
-        sessionId: session.sessionId,
-        shortId: session.sessionId?.slice(0, 8) || '',
-        candidateId: session.candidateId || `${session.candidates?.length || 0} candidates`,
-        candidateName: session.tenantName || 'Multiple Candidates',
-        examId: session.examType || 'exam',
-        organizationId: session.tenantId || 'unknown',
-        status: session.status || 'active',
-        score: session.score || 0,
-        credibilityScore: 100,
-        riskLevel: 'low',
-        violations: sortedViolations,
+        sessionId: requestedSessionId,
+        baseSessionId,
+        shortId: baseSessionId.slice(-8),
+        candidateId: candidate?.email || candidate?.name || session.candidateId,
+        examId: session.examId,
+        organizationId: session.orgId,
+        status: session.status,
+        score: {
+          current: Number(session.score?.current ?? Math.round(credibilityIndex * 100)),
+          credibilityIndex,
+          riskLevel: session.score?.riskLevel || 'low',
+        },
+        credibilityScore: credibilityIndex,
+        riskLevel: session.score?.riskLevel || 'low',
+        violations: mergedViolations,
         duration,
         startedAt: startedAt.toISOString(),
-        completedAt: session.endedAt || null,
+        completedAt: endedAt?.toISOString(),
         candidates: session.candidates || [],
         aiAgents: {
-          vision:   { status: 'active', healthScore: 95 },
-          audio:    { status: 'active', healthScore: 92 },
-          behavior: { status: 'active', healthScore: 98 }
-        }
-      }
+          vision: { status: 'active', healthScore: 95 },
+          audio: { status: 'active', healthScore: 92 },
+          behavior: { status: 'active', healthScore: 88 },
+        },
+      },
     });
   } catch (error) {
     console.error('❌ Session Detail API Error:', error);

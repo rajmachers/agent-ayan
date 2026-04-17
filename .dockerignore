@@ -1,19 +1,49 @@
-node_modules
-dist
-.next
-out
-build
 .git
+.gitignore
+
+# local env
 .env
-.env.local
+.env.*
+!.env.example
+
+# dependencies and package manager caches
+node_modules
+**/node_modules
+.pnpm-store
+**/.pnpm-store
+
+# build/test artifacts
+dist
+**/dist
+build
+**/build
+out
+**/out
+.next
+**/.next
+coverage
+**/coverage
+.nyc_output
+*.tsbuildinfo
+
+# logs
 *.log
 logs
-coverage
-.nyc_output
+**/logs
+
+# editor/OS files
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# runtime volumes and temporary data
 docker/volumes
+tmp
+**/tmp
+
+# large AI model blobs
 hub/ai-services/*/models/*.bin
 hub/ai-services/*/models/*.pt
 hub/ai-services/*/models/*.onnx
-.DS_Store
-Thumbs.db
-pnpm-lock.yaml
+hub/ai-services/*/models/*.safetensors

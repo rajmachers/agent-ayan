@@ -3,9 +3,11 @@
 import Link from 'next/link'
 import { useSimulation } from '@/context/SimulationContext'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ScoreCalculator } from '@/lib/score-calculator'
 import { HintIcon } from '@/components/HintIcon'
-import { VIOLATION_TYPES } from '@/lib/constants'
+import { EXAM_TYPES, VIOLATION_TYPES } from '@/lib/constants'
+import { apiClient } from '@/lib/api-client'
 
 interface ViolationForm {
   candidateId: string
@@ -14,10 +16,13 @@ interface ViolationForm {
 }
 
 export default function ExamMonitorPage() {
-  const { session, injectViolation } = useSimulation()
+  const router = useRouter()
+  const { session, injectViolation, clearSession, ensureSessionInGateway } = useSimulation()
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [showViolationModal, setShowViolationModal] = useState(false)
-  const [selectedCandidate, setSelectedCandidate] = useState('')
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
   const [violationForm, setViolationForm] = useState<ViolationForm>({
     candidateId: '',
     violationType: 'eye_contact',
@@ -25,9 +30,52 @@ export default function ExamMonitorPage() {
   })
   const [loading, setLoading] = useState(false)
 
+  const selectedExam = session ? EXAM_TYPES.find((exam) => exam.id === session.examType) : null
+  const examDurationSeconds = selectedExam ? selectedExam.duration * 60 : 0
+
   useEffect(() => {
     if (!session) window.location.href = '/setup'
   }, [session])
+
+  useEffect(() => {
+    if (!session) return
+    ensureSessionInGateway().catch((error) => {
+      console.error('Failed to ensure session sync in gateway:', error)
+    })
+  }, [session, ensureSessionInGateway])
+
+  useEffect(() => {
+    if (!session || !selectedExam || sessionExpired) return
+
+    const syncRemaining = async () => {
+      const elapsed = Math.floor((Date.now() - session.startedAt) / 1000)
+      const nextRemaining = Math.max(0, examDurationSeconds - elapsed)
+      setRemainingSeconds(nextRemaining)
+
+      if (nextRemaining !== 0) return
+
+      setSessionExpired(true)
+
+      const submittedCandidates = (session.candidates || []).map((candidate) => ({
+        ...candidate,
+        status: 'submitted',
+      }))
+
+      await apiClient.updateSessionStatus(
+        session.id,
+        'time_expired',
+        'Auto submitted by simulator after exam timer reached zero',
+        submittedCandidates
+      )
+
+      clearSession()
+      router.push('/?sessionEnded=1')
+    }
+
+    syncRemaining()
+    const timer = setInterval(syncRemaining, 1000)
+    return () => clearInterval(timer)
+  }, [session, selectedExam, examDurationSeconds, sessionExpired, clearSession, router])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -62,6 +110,9 @@ export default function ExamMonitorPage() {
 
   const selectedViolationType = VIOLATION_TYPES.find((v) => v.id === violationForm.violationType)
   const candidate = session.candidates.find((c) => c.id === violationForm.candidateId)
+  const pageSize = 10
+  const totalPages = Math.max(1, Math.ceil(session.candidates.length / pageSize))
+  const paginatedCandidates = session.candidates.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   return (
     <div className="space-y-6">
@@ -82,6 +133,17 @@ export default function ExamMonitorPage() {
           Session: <span className="text-blue-300 font-mono">{session.id.slice(-8)}</span> | Batch:{' '}
           <span className="text-green-300">{session.batchId}</span>
         </p>
+        {selectedExam && remainingSeconds !== null && (
+          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-2 text-sm">
+            <span className="text-slate-300">Exam Duration:</span>
+            <span className="font-semibold text-cyan-300">{selectedExam.duration}m</span>
+            <span className="text-slate-500">|</span>
+            <span className="text-slate-300">Time Remaining:</span>
+            <span className={`font-mono font-bold ${remainingSeconds <= 60 ? 'text-red-400' : 'text-green-300'}`}>
+              {Math.floor(remainingSeconds / 60)}m {remainingSeconds % 60}s
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Controls */}
@@ -129,104 +191,95 @@ export default function ExamMonitorPage() {
           />
         </button>
       </div>
+      </div>
 
-      {/* Candidate Grid */}
-      <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {session.candidates.map((candidate) => {
-          const riskLevel = ScoreCalculator.getRiskLevel(candidate.zScore)
-          const riskColors = {
-            excellent: 'from-green-500 to-emerald-500',
-            good: 'from-emerald-500 to-cyan-500',
-            average: 'from-yellow-500 to-orange-500',
-            'high-risk': 'from-orange-500 to-red-500',
-            critical: 'from-red-500 to-rose-500',
-          }
+      {/* Candidate Table */}
+      <div className="bg-slate-800/50 border border-slate-700 rounded-lg overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-700 flex items-center justify-between">
+          <h3 className="text-lg font-bold">Candidate Monitor</h3>
+          <span className="text-sm text-slate-300">Page {currentPage} of {totalPages}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900/60 border-b border-slate-700">
+              <tr>
+                <th className="px-4 py-3 text-left text-slate-300">Name</th>
+                <th className="px-4 py-3 text-left text-slate-300">Status</th>
+                <th className="px-4 py-3 text-right text-slate-300">Score</th>
+                <th className="px-4 py-3 text-right text-slate-300">Z-Score</th>
+                <th className="px-4 py-3 text-right text-slate-300">Percentile</th>
+                <th className="px-4 py-3 text-right text-slate-300">Violations</th>
+                <th className="px-4 py-3 text-left text-slate-300">Risk</th>
+                <th className="px-4 py-3 text-right text-slate-300">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedCandidates.map((candidate) => {
+                const riskLevel = ScoreCalculator.getRiskLevel(candidate.zScore)
+                const riskClass =
+                  riskLevel === 'excellent'
+                    ? 'text-green-300 bg-green-500/20'
+                    : riskLevel === 'good'
+                    ? 'text-emerald-300 bg-emerald-500/20'
+                    : riskLevel === 'average'
+                    ? 'text-yellow-300 bg-yellow-500/20'
+                    : riskLevel === 'high-risk'
+                    ? 'text-orange-300 bg-orange-500/20'
+                    : 'text-red-300 bg-red-500/20'
 
-          const statusIcons = {
-            active: '✅',
-            paused: '⏸️',
-            locked: '🔒',
-            terminated: '🛑',
-          }
-
-          return (
-            <button
-              key={candidate.id}
-              onClick={() => {
-                setViolationForm({ ...violationForm, candidateId: candidate.id })
-                setShowViolationModal(true)
-              }}
-              className={`bg-gradient-to-br ${riskColors[riskLevel]} bg-opacity-10 border-2 border-opacity-30 rounded-lg p-4 hover:border-opacity-60 transition-all cursor-pointer hover:shadow-lg`}
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div className="text-left flex-1">
-                  <h3 className="font-bold truncate">{candidate.name}</h3>
-                  <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                    {statusIcons[candidate.status as keyof typeof statusIcons]}
-                    {candidate.status}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1 text-sm mb-2">
-                <div className="flex justify-between">
-                  <span>Score</span>
-                  <HintIcon
-                    icon="?"
-                    size="sm"
-                    title="Score"
-                    description="Candidate's current score (0-100). Decreases when violations are injected."
-                    examples={['100: No violations', '85: 1-2 minor violations', '50: Multiple serious violations']}
-                  />
-                  <span className="font-bold">{candidate.score.toFixed(0)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Z-Score</span>
-                  <HintIcon
-                    icon="?"
-                    size="sm"
-                    title="Z-Score"
-                    description="Statistical measure how far from cohort average. Positive = better, negative = worse."
-                    examples={['1.0: Above average', '0.0: At average', '-1.0: Below average']}
-                  />
-                  <span className="font-mono text-xs">{candidate.zScore.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Percentile</span>
-                  <HintIcon
-                    icon="?"
-                    size="sm"
-                    title="Percentile"
-                    description="Rank among cohort (0-100%). Higher = better ranking."
-                    examples={['95th: Top 5%', '50th: Median', '5th: Bottom 5%']}
-                  />
-                  <span className="font-bold">{candidate.percentile.toFixed(0)}%</span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center text-xs mb-2">
-                <span className="text-slate-400">Violations</span>
-                <HintIcon
-                  icon="?"
-                  size="sm"
-                  title="Violations"
-                  description="Total number of violations detected for this candidate."
-                  details="Higher violations = lower score. Each violation type has different weight impact."
-                />
-                <span className="font-bold">{candidate.violations.length}</span>
-              </div>
-
-              <div className="w-full bg-slate-700 rounded h-2 overflow-hidden">
-                <div
-                  className={`h-full bg-gradient-to-r ${riskColors[riskLevel]}`}
-                  style={{ width: `${candidate.score}%` }}
-                ></div>
-              </div>
-
-              <p className="text-xs text-slate-400 mt-2 capitalize">{riskLevel}</p>
-            </button>
-          )
-        })}
+                return (
+                  <tr key={candidate.id} className="border-b border-slate-700/60 hover:bg-slate-700/20">
+                    <td className="px-4 py-3 font-semibold text-white">{candidate.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-slate-700 text-slate-100">
+                        {candidate.status === 'active' ? '✅ Active' : candidate.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-bold text-white">{candidate.score.toFixed(0)}</td>
+                    <td className="px-4 py-3 text-right font-mono text-slate-100">{candidate.zScore.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-100">{candidate.percentile.toFixed(0)}%</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-100">{candidate.violations.length}</td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex rounded px-2 py-0.5 text-xs font-medium capitalize ${riskClass}`}>
+                        {riskLevel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => {
+                          setViolationForm({ ...violationForm, candidateId: candidate.id })
+                          setShowViolationModal(true)
+                        }}
+                        className="rounded bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-500"
+                      >
+                        Inject
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-700 bg-slate-900/40">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-200 disabled:opacity-40"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-slate-300">
+            Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, session.candidates.length)} of {session.candidates.length}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="rounded border border-slate-600 px-3 py-1 text-sm text-slate-200 disabled:opacity-40"
+          >
+            Next
+          </button>
+        </div>
       </div>
 
       {/* Summary Stats */}
@@ -259,11 +312,6 @@ export default function ExamMonitorPage() {
 
       {/* Navigation */}
       <div className="flex gap-3">
-        <Link href="/admin-dashboard">
-          <button className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold transition-all">
-            ⚙️ Admin Dashboard
-          </button>
-        </Link>
         <Link href="/analytics">
           <button className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold transition-all">
             📈 Analytics

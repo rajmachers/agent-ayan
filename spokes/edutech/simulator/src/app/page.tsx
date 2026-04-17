@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function Home() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [activeStep, setActiveStep] = useState(0)
   const [savedSession, setSavedSession] = useState<any>(null)
+  const [showSessionEndedMessage, setShowSessionEndedMessage] = useState(false)
 
   useEffect(() => {
     // Check for saved session in localStorage
@@ -24,6 +26,10 @@ export default function Home() {
       console.log('[Resume] No saved session found in localStorage')
     }
   }, [])
+
+  useEffect(() => {
+    setShowSessionEndedMessage(searchParams.get('sessionEnded') === '1')
+  }, [searchParams])
 
   const handleResumeSession = () => {
     router.push('/exam-monitor')
@@ -46,12 +52,6 @@ export default function Home() {
       description: 'Real-time candidate monitoring with score tracking & violation injection',
       href: '/exam-monitor',
       color: 'from-green-500 to-emerald-500',
-    },
-    {
-      title: '⚙️ Admin Dashboard',
-      description: 'Batch operations: lock, pause, resume, flag, terminate candidates',
-      href: '/admin-dashboard',
-      color: 'from-orange-500 to-red-500',
     },
     {
       title: '📈 Analytics',
@@ -86,6 +86,20 @@ export default function Home() {
         <p className="text-xl text-slate-300 max-w-2xl mx-auto">
           Interactive platform to demonstrate Phase 6 agentic intelligence capabilities: real-time monitoring, violation detection, adaptive scoring, and cohort analytics.
         </p>
+
+        {showSessionEndedMessage && (
+          <div className="max-w-2xl mx-auto bg-amber-900/40 border border-amber-600 rounded-lg p-5 text-left">
+            <h3 className="text-lg font-bold text-amber-300">Session Time Completed</h3>
+            <p className="text-sm text-slate-200 mt-1">
+              The simulator marked the session as time expired and auto-submitted it. You can start a new run from Setup.
+            </p>
+            <div className="mt-3">
+              <Link href="/setup" className="text-cyan-300 hover:text-cyan-200 underline underline-offset-4">
+                Go to Setup page
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Resume Session Card */}
         {savedSession && (

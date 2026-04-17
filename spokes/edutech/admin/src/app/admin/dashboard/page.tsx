@@ -48,6 +48,10 @@ export default function AdminDashboard() {
   const [mounted, setMounted] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [terminateDialog, setTerminateDialog] = useState<{ open: boolean; sessionId: string | null; candidateId?: string }>({
+    open: false,
+    sessionId: null,
+  });
 
   // Detect if user is super admin
   const isSuperAdmin = tenantSession?.organizationType === 'system-admin';
@@ -62,7 +66,7 @@ export default function AdminDashboard() {
 
   // Helper to categorize sessions
   const isSessionLive = (status: string): boolean => {
-    return status === 'active' || status.startsWith('idle-') || status === 'paused' || status === 'locked';
+    return status === 'active' || status === 'paused' || status === 'locked';
   };
 
   // Export sessions to CSV
@@ -94,21 +98,64 @@ export default function AdminDashboard() {
     window.URL.revokeObjectURL(url);
   };
 
-  // Helper to calculate idle status based on elapsed time
-  const calculateIdleStatus = (createdAt: string | Date) => {
-    const now = Date.now();
-    const created = new Date(createdAt).getTime();
-    const elapsedMinutes = (now - created) / (1000 * 60);
-    
-    if (elapsedMinutes >= 15) return 'idle-red';
-    if (elapsedMinutes >= 10) return 'idle-amber';
-    if (elapsedMinutes >= 5) return 'idle-yellow';
-    return 'active';
+  const normalizeSessionStatus = (status: unknown): string => {
+    const raw = String(status || 'active').toLowerCase();
+    if (raw === 'stopped') return 'terminated';
+    if (raw === 'complete') return 'completed';
+    return raw;
+  };
+
+  const normalizeCredibility = (value: unknown): number => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return 0;
+    if (numeric <= 1) return Math.max(0, Math.min(1, numeric));
+    return Math.max(0, Math.min(1, numeric / 100));
+  };
+
+  const deriveRiskLevel = (credibility: number, violationCount: number): 'low' | 'medium' | 'high' | 'critical' => {
+    if (violationCount >= 8 || credibility < 0.35) return 'critical';
+    if (violationCount >= 5 || credibility < 0.55) return 'high';
+    if (violationCount >= 2 || credibility < 0.8) return 'medium';
+    return 'low';
+  };
+
+  const getBaseSessionId = (sessionId: string): string => {
+    const marker = '__c';
+    const markerIndex = sessionId.lastIndexOf(marker);
+    return markerIndex === -1 ? sessionId : sessionId.slice(0, markerIndex);
+  };
+
+  const handleTerminateSession = async () => {
+    if (!terminateDialog.sessionId) return;
+
+    try {
+      const baseSessionId = getBaseSessionId(terminateDialog.sessionId);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_HUB_GATEWAY_URL || 'http://localhost:14001'}/api/v1/sessions/${baseSessionId}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': 'demo-key',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to terminate session');
+      }
+
+      await refreshSessions();
+    } catch (error) {
+      console.error('Failed to terminate session:', error);
+    } finally {
+      setTerminateDialog({ open: false, sessionId: null });
+    }
   };
 
   // Convert Control Plane sessions to expected format
   const sessions = controlPlaneSessions.map((s: any) => {
-    const calculatedStatus = calculateIdleStatus(s.startedAt || s.createdAt);
+    const resolvedStatus = normalizeSessionStatus(s.status);
+    const violationCount = Number(s.violationCount ?? (Array.isArray(s.violations) ? s.violations.length : 0));
+    const credibilityScore = normalizeCredibility(s.credibilityScore ?? s.score?.credibilityIndex ?? s.score?.current);
+    const riskLevel = s.riskLevel || deriveRiskLevel(credibilityScore, violationCount);
     
     return {
       sessionId: s.sessionId,
@@ -116,13 +163,14 @@ export default function AdminDashboard() {
       candidateId: s.candidateId || 'batch-' + (s.batchId || 'unknown'),
       examId: s.examType || 'simulator',
       organizationId: s.tenantId || '',
-      status: calculatedStatus,
+      status: resolvedStatus,
       startedAt: new Date(s.startedAt || s.createdAt),
       completedAt: s.endedAt ? new Date(s.endedAt) : undefined,
+      elapsedSeconds: Number.isFinite(Number(s.duration)) ? Number(s.duration) : undefined,
       lastActivity: new Date(),
       score: s.score || 0,
-      credibilityScore: Math.max(0.6, 1.0 - (s.violationCount * 0.08) - Math.random() * 0.15),
-      riskLevel: s.violationCount ? (s.violationCount > 5 ? 'critical' : s.violationCount > 3 ? 'high' : 'medium') : 'low',
+      credibilityScore,
+      riskLevel,
       violations: s.violations || [],
       currentQuestion: undefined,
       totalQuestions: undefined,
@@ -134,13 +182,17 @@ export default function AdminDashboard() {
       },
       batchId: s.batchId,
       candidatesCount: s.candidateCount || 0,
-      violationCount: s.violationCount || 0,
+      violationCount,
     };
   });
 
   // Flatten sessions into individual candidate rows
   const candidateRows = sessions.flatMap((session: any) => {
     const candidates = session.metadata?.candidates || [];
+
+    if (session.sessionId?.includes('__c')) {
+      return [{ ...session, candidateData: null }];
+    }
     
     if (candidates.length === 0) {
       // If no candidates array, show session as single row
@@ -151,12 +203,12 @@ export default function AdminDashboard() {
     return candidates.map((candidate: any, idx: number) => ({
       ...session,
       candidateData: candidate,
-      candidateId: candidate.name || candidate.id || `Candidate ${idx + 1}`,
+      candidateId: candidate.email || candidate.name || candidate.id || `Candidate ${idx + 1}`,
       score: candidate.score || 0,
-      credibilityScore: Math.max(0.65, (candidate.score || 90) / 100 - (candidate.violations?.length || 0) * 0.05 - Math.random() * 0.1),
-      riskLevel: candidate.riskLevel || session.riskLevel,
-      violations: session.violations || [], // Use session-level violations
-      violationCount: session.violationCount || (session.violations?.length || 0), // Session-level count
+      credibilityScore: normalizeCredibility(candidate.score ?? session.credibilityScore),
+      riskLevel: candidate.riskLevel || deriveRiskLevel(normalizeCredibility(candidate.score ?? session.credibilityScore), candidate.violations?.length || session.violationCount || 0),
+      violations: candidate.violations || session.violations || [],
+      violationCount: (candidate.violations?.length || 0) || session.violationCount || (session.violations?.length || 0),
       rowKey: `${session.sessionId}-${candidate.id || idx}`
     }));
   });
@@ -281,12 +333,13 @@ export default function AdminDashboard() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'idle-yellow': return 'idle (5m)';
-      case 'idle-amber': return 'idle (10m)';
-      case 'idle-red': return 'idle (15m+)';
       case 'paused': return '⏸ paused';
       case 'locked': return '🔒 locked';
       case 'terminated': return '🛑 terminated';
+      case 'submitted': return '✅ submitted';
+      case 'auto_submitted': return '⏱ auto submitted';
+      case 'time_expired': return '⏱ time expired';
+      case 'aborted': return '⚪ aborted';
       default: return status;
     }
   };
@@ -679,12 +732,12 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className={`text-sm font-medium ${
-                        (session.credibilityScore * 100) >= 90 ? 'text-green-400' :
-                        (session.credibilityScore * 100) >= 80 ? 'text-yellow-400' :
-                        (session.credibilityScore * 100) >= 60 ? 'text-orange-400' :
+                        (normalizeCredibility(session.credibilityScore) * 100) >= 90 ? 'text-green-400' :
+                        (normalizeCredibility(session.credibilityScore) * 100) >= 80 ? 'text-yellow-400' :
+                        (normalizeCredibility(session.credibilityScore) * 100) >= 60 ? 'text-orange-400' :
                         'text-red-400'
                       }`}>
-                        {Math.round(session.credibilityScore * 100)}%
+                        {Math.round(normalizeCredibility(session.credibilityScore) * 100)}%
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -698,10 +751,17 @@ export default function AdminDashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-300">
-                        {session.completedAt ? 
-                          formatDuration(Math.floor((new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000)) :
-                          formatDuration(Math.floor((new Date().getTime() - new Date(session.startedAt).getTime()) / 1000))
-                        }
+                        {session.completedAt
+                          ? formatDuration(
+                              Number.isFinite(Number((session as any).elapsedSeconds))
+                                ? Number((session as any).elapsedSeconds)
+                                : Math.floor((new Date(session.completedAt).getTime() - new Date(session.startedAt).getTime()) / 1000)
+                            )
+                          : formatDuration(
+                              Number.isFinite(Number((session as any).elapsedSeconds))
+                                ? Number((session as any).elapsedSeconds)
+                                : Math.floor((new Date().getTime() - new Date(session.startedAt).getTime()) / 1000)
+                            )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -751,13 +811,11 @@ export default function AdminDashboard() {
                         {session.status !== 'completed' && session.status !== 'terminated' && session.status !== 'abandoned' && (
                           <button
                             onClick={() => {
-                              if (confirm('Are you sure you want to terminate this session? This cannot be undone.')) {
-                                const ws = new WebSocket('ws://localhost:8181?type=admin');
-                                ws.onopen = () => {
-                                  ws.send(JSON.stringify({ type: 'admin:terminate_session', sessionId: session.sessionId, reason: 'Terminated by proctor from dashboard' }));
-                                  setTimeout(() => ws.close(), 500);
-                                };
-                              }
+                              setTerminateDialog({
+                                open: true,
+                                sessionId: session.sessionId,
+                                candidateId: session.candidateId,
+                              });
                             }}
                             className="text-red-400 hover:text-red-300 transition-colors"
                             title="Terminate session"
@@ -787,6 +845,39 @@ export default function AdminDashboard() {
           </div>
         </div>
       </main>
+
+      {terminateDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md rounded-xl border border-navy-600 bg-navy-900 shadow-2xl">
+            <div className="p-6">
+              <h3 className="text-lg font-semibold text-white">Terminate Session</h3>
+              <p className="mt-2 text-sm text-gray-300">
+                Are you sure you want to terminate this candidate session?
+              </p>
+              <p className="mt-2 text-xs text-gray-400">
+                Candidate: {terminateDialog.candidateId || 'Unknown'}
+              </p>
+              <p className="mt-1 text-xs text-red-300">
+                This action is final and cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-navy-700 px-6 py-4">
+              <button
+                onClick={() => setTerminateDialog({ open: false, sessionId: null })}
+                className="rounded-lg border border-navy-500 px-4 py-2 text-sm text-gray-200 hover:bg-navy-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTerminateSession}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+              >
+                Terminate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
