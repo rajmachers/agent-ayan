@@ -10,7 +10,8 @@ import {
   RefreshCw, User, Building2, Settings,
   Globe, UserPlus, BarChart3, Cog,
   Database, Package, Zap, Wifi, WifiOff,
-  PauseCircle, PlayCircle, XCircle, Lock, Bell, Sparkles
+  PauseCircle, PlayCircle, XCircle, Lock, Bell, Sparkles,
+  BriefcaseBusiness, Handshake, Landmark, ClipboardCheck
 } from 'lucide-react';
 import { useControlPlaneSessions } from '../../../../hooks/useControlPlaneSessions';
 
@@ -43,6 +44,7 @@ export default function AdminDashboard() {
   const [batchFilter, setBatchFilter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sessionTab, setSessionTab] = useState<'live' | 'past'>('live');
+  const [hybridTeamView, setHybridTeamView] = useState<'admin' | 'proctor' | 'account-manager' | 'finance' | 'opg'>('admin');
   const [activeView, setActiveView] = useState<'tenant-admin' | 'super-admin'>('tenant-admin');
   const [superAdminActiveView, setSuperAdminActiveView] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
@@ -273,6 +275,80 @@ export default function AdminDashboard() {
   };
 
   const sortedSessions = sessionTab === 'live' ? sortByPriority(liveSessions) : sortByPriority(pastSessions);
+
+  const criticalRows = candidateRows.filter((row: any) => row.riskLevel === 'critical');
+  const highRiskRows = candidateRows.filter((row: any) => row.riskLevel === 'high');
+  const lockedRows = candidateRows.filter((row: any) => row.status === 'locked');
+  const pausedRows = candidateRows.filter((row: any) => row.status === 'paused');
+  const terminatedRows = candidateRows.filter((row: any) => row.status === 'terminated');
+  const completedRows = candidateRows.filter((row: any) => row.status === 'completed');
+  const reviewQueueRows = candidateRows.filter((row: any) => ['high', 'critical'].includes(row.riskLevel) || row.status === 'locked');
+
+  const hybridLaneConfig: Record<string, { title: string; description: string; icon: any; color: string }> = {
+    admin: {
+      title: 'Admin Lane',
+      description: 'Cross-team oversight, live operations and escalation control.',
+      icon: BriefcaseBusiness,
+      color: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
+    },
+    proctor: {
+      title: 'Proctor Lane',
+      description: 'Live intervention queue for active, paused and locked sessions.',
+      icon: Eye,
+      color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10',
+    },
+    'account-manager': {
+      title: 'Account Manager Lane',
+      description: 'Tenant health, session continuity and candidate communication readiness.',
+      icon: Handshake,
+      color: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+    },
+    finance: {
+      title: 'Finance Lane',
+      description: 'Billable session health and exception tracking for compliance billing.',
+      icon: Landmark,
+      color: 'text-green-400 border-green-500/30 bg-green-500/10',
+    },
+    opg: {
+      title: 'OPG Lane',
+      description: 'Operational governance, policy adherence and post-exam review queue.',
+      icon: ClipboardCheck,
+      color: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
+    },
+  };
+
+  const hybridLaneCards: Record<string, Array<{ label: string; value: number; hint: string }>> = {
+    admin: [
+      { label: 'Live Sessions', value: liveSessions.length, hint: 'currently monitored' },
+      { label: 'Critical Alerts', value: criticalRows.length, hint: 'requires immediate action' },
+      { label: 'Locked Sessions', value: lockedRows.length, hint: 'manual unlock needed' },
+      { label: 'Review Queue', value: reviewQueueRows.length, hint: 'cross-team follow up' },
+    ],
+    proctor: [
+      { label: 'Active Sessions', value: liveSessions.filter((row) => row.status === 'active').length, hint: 'live watchlist' },
+      { label: 'Paused Sessions', value: pausedRows.length, hint: 'ready to resume' },
+      { label: 'Locked Sessions', value: lockedRows.length, hint: 'needs intervention' },
+      { label: 'High Risk Candidates', value: highRiskRows.length + criticalRows.length, hint: 'watch priority' },
+    ],
+    'account-manager': [
+      { label: 'Tenant Sessions', value: candidateRows.length, hint: 'total loaded rows' },
+      { label: 'At-Risk Sessions', value: highRiskRows.length + criticalRows.length, hint: 'stakeholder follow-up' },
+      { label: 'Terminated Sessions', value: terminatedRows.length, hint: 'candidate support needed' },
+      { label: 'Completed Sessions', value: completedRows.length, hint: 'success confirmation' },
+    ],
+    finance: [
+      { label: 'Billable Active', value: liveSessions.length, hint: 'running billable units' },
+      { label: 'Completed Exams', value: completedRows.length, hint: 'ready for settlement' },
+      { label: 'Disputed Sessions', value: terminatedRows.length + lockedRows.length, hint: 'requires verification' },
+      { label: 'Exception Queue', value: reviewQueueRows.length, hint: 'manual finance review' },
+    ],
+    opg: [
+      { label: 'Governance Queue', value: reviewQueueRows.length, hint: 'policy review pending' },
+      { label: 'Critical Cases', value: criticalRows.length, hint: 'escalation candidates' },
+      { label: 'Paused + Locked', value: pausedRows.length + lockedRows.length, hint: 'intervention backlog' },
+      { label: 'Completed with Flags', value: completedRows.filter((row) => row.violationCount > 0).length, hint: 'audit recommended' },
+    ],
+  };
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -565,6 +641,55 @@ export default function AdminDashboard() {
             <Sparkles className="w-4 h-4" />
             AI Accuracy
           </button>
+        </div>
+
+        {/* Hybrid Proctor Command Center */}
+        <div className="bg-navy-800 rounded-lg p-6 border border-navy-700 mb-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Hybrid Proctor Command Center</h2>
+              <p className="text-sm text-gray-400">Integrated lanes for Admin, Proctor, Account Manager, Finance, and OPG using live session telemetry.</p>
+            </div>
+            <span className="inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
+              Release Branch: agent-ayan-auto-remote-proctor
+            </span>
+          </div>
+
+          <div className="flex flex-wrap gap-2 mb-5">
+            {Object.entries(hybridLaneConfig).map(([laneKey, lane]) => {
+              const LaneIcon = lane.icon;
+              const selected = hybridTeamView === laneKey;
+              return (
+                <button
+                  key={laneKey}
+                  onClick={() => setHybridTeamView(laneKey as any)}
+                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
+                    selected
+                      ? lane.color
+                      : 'border-navy-600 bg-navy-900 text-gray-300 hover:border-navy-500 hover:text-white'
+                  }`}
+                >
+                  <LaneIcon className="w-4 h-4" />
+                  {lane.title}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="rounded-lg border border-navy-600 bg-navy-900/70 p-4 mb-4">
+            <div className="text-sm font-medium text-white">{hybridLaneConfig[hybridTeamView].title}</div>
+            <p className="text-xs text-gray-400 mt-1">{hybridLaneConfig[hybridTeamView].description}</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {hybridLaneCards[hybridTeamView].map((card) => (
+              <div key={card.label} className="rounded-lg border border-navy-600 bg-navy-900 p-4">
+                <div className="text-xs text-gray-400 uppercase tracking-wide">{card.label}</div>
+                <div className="mt-2 text-2xl font-semibold text-white">{card.value}</div>
+                <div className="text-xs text-gray-500 mt-1">{card.hint}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Filters */}
