@@ -217,6 +217,9 @@ services:
     environment:
       PORT: 3000
       REDIS_URL: redis://:${REDIS_PASSWORD:-changeme_in_production}@hub-redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme_in_production}
+      REDIS_HOST: hub-redis
+      REDIS_PORT: 6379
       CORS_ORIGIN: http://localhost:3001,http://localhost:3002,http://localhost:3003
       JWT_SECRET: ${JWT_SECRET:-changeme_32_char_random_secret_here}
     depends_on:

@@ -107,22 +107,44 @@ class WebSocketService {
   }
 
   private setupRedis(): void {
-    // Main Redis connection
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '12631'),
-      db: 0,
+    const redisUrl = process.env.REDIS_URL;
+    const redisPassword = process.env.REDIS_PASSWORD;
+    const redisHost = process.env.REDIS_HOST || 'localhost';
+    const redisPort = parseInt(process.env.REDIS_PORT || '12631');
+
+    const baseOptions = {
       connectTimeout: 2000,
       maxRetriesPerRequest: 3
-    });
+    };
+
+    // Main Redis connection
+    this.redis = redisUrl
+      ? new Redis(redisUrl, { ...baseOptions, db: 0 })
+      : new Redis({
+          host: redisHost,
+          port: redisPort,
+          password: redisPassword,
+          db: 0,
+          ...baseOptions
+        });
 
     // Pub/Sub Redis connection
-    this.pubSubRedis = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '12631'),
-      db: 1, // Use separate DB for pub/sub
-      connectTimeout: 2000,
-      maxRetriesPerRequest: 3
+    this.pubSubRedis = redisUrl
+      ? new Redis(redisUrl, { ...baseOptions, db: 1 })
+      : new Redis({
+          host: redisHost,
+          port: redisPort,
+          password: redisPassword,
+          db: 1, // Use separate DB for pub/sub
+          ...baseOptions
+        });
+
+    this.redis.on('error', (error) => {
+      this.logger.error('Redis connection error:', error);
+    });
+
+    this.pubSubRedis.on('error', (error) => {
+      this.logger.error('Redis pub/sub error:', error);
     });
 
     // Subscribe to system events
